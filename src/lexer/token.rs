@@ -1,13 +1,12 @@
-use std::convert::identity;
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Token {
-    Illegal(char),
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+pub enum TokenType {
+    Illegal,
     EOF,
 
-    Identity(String),
-    Int(i64),
+    Identity,
+    Int,
 
     Assign,
     Plus,
@@ -41,64 +40,140 @@ pub enum Token {
     Return,
 }
 
-impl Token {
-    pub fn lookup_ident(ident: &str) -> Token {
+impl TokenType {
+    pub fn lookup_ident(ident: &str) -> TokenType {
         match ident {
-            "fn" => Token::Function,
-            "let" => Token::Let,
-            "true" => Token::True,
-            "false" => Token::False,
-            "if" => Token::If,
-            "else" => Token::Else,
-            "return" => Token::Return,
-            _ => Token::Identity(ident.to_string()),
+            "fn" => TokenType::Function,
+            "let" => TokenType::Let,
+            "true" => TokenType::True,
+            "false" => TokenType::False,
+            "if" => TokenType::If,
+            "else" => TokenType::Else,
+            "return" => TokenType::Return,
+            _ => TokenType::Identity,
         }
-    }
-
-    pub fn literal(&self) -> String{
-        match self {
-            Token::Illegal(c) => format!("illegal({})", c),
-            Token::EOF => "EOF".to_string(),
-            Token::Identity(id) => format!("identity({})", id),
-            Token::Int(number) => format!("number({})", number),
-            Token::Assign => "=".to_string(),
-            Token::Plus => "+".to_string(),
-            Token::Minus => "-".to_string(),
-            Token::Bang => "!".to_string(),
-            Token::Asterisk => "*".to_string(),
-            Token::Slash => "\\".to_string(),
-            Token::LT => "<".to_string(),
-            Token::GT => ">".to_string(),
-            Token::EQ => "==".to_string(),
-            Token::NotEq => "!=".to_string(),
-            Token::LE => "<=".to_string(),
-            Token::GE => ">=".to_string(),
-            Token::Comma => ",".to_string(),
-            Token::Semicolon => ";".to_string(),
-            Token::LParen => "(".to_string(),
-            Token::RParen => ")".to_string(),
-            Token::LBrace => "{".to_string(),
-            Token::RBrace => "}".to_string(),
-            Token::Function => "fn".to_string(),
-            Token::Let => "let".to_string(),
-            Token::True => "True".to_string(),
-            Token::False => "False".to_string(),
-            Token::If => "if".to_string(),
-            Token::Else => "else".to_string(),
-            Token::Return => "return".to_string(),
-        }
-
     }
 }
 
-impl Into<String> for &Token{
-    fn into(self) -> String {
-        self.literal()
-    }
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct Token {
+    pub token_type: TokenType,
+    pub literal: String,
 }
 
-impl Hash for Token {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        todo!()
+impl Token {
+    pub fn new(token_type: TokenType, literal: &str) -> Self {
+        Self {
+            token_type,
+            literal: literal.into(),
+        }
+    }
+    pub fn new_illegal(literal: &str) -> Self {
+        Self::new(TokenType::Illegal, literal)
+    }
+    pub fn new_eof() -> Self {
+        Self::new(TokenType::EOF, "eof")
+    }
+    pub fn new_identity(literal: &str) -> Self {
+        Self::new(TokenType::Identity, literal)
+    }
+    pub fn new_int(literal: &str) -> Self {
+        Self::new(TokenType::Int, literal)
+    }
+    pub fn new_assign() -> Self {
+        Self::new(TokenType::Assign, "=")
+    }
+    pub fn new_plus() -> Self {
+        Self::new(TokenType::Plus, "+")
+    }
+    pub fn new_minus() -> Self {
+        Self::new(TokenType::Minus, "-")
+    }
+
+    pub fn new_bang() -> Self {
+        Self::new(TokenType::Bang, "!")
+    }
+
+    pub fn new_asterisk() -> Self {
+        Self::new(TokenType::Asterisk, "*")
+    }
+
+    pub fn new_slash() -> Self {
+        Self::new(TokenType::Slash, "/")
+    }
+
+    pub fn new_lt() -> Self {
+        Self::new(TokenType::LT, "<")
+    }
+
+    pub fn new_gt() -> Self {
+        Self::new(TokenType::GT, ">")
+    }
+
+    pub fn new_eq() -> Self {
+        Self::new(TokenType::EQ, "==")
+    }
+
+    pub fn new_not_eq() -> Self {
+        Self::new(TokenType::NotEq, "!=")
+    }
+
+    pub fn new_le() -> Self {
+        Self::new(TokenType::Let, "<=")
+    }
+
+    pub fn new_ge() -> Self {
+        Self::new(TokenType::GE, ">=")
+    }
+
+    pub fn new_comma() -> Self {
+        Self::new(TokenType::Comma, ",")
+    }
+
+    pub fn new_semicolon() -> Self {
+        Self::new(TokenType::Semicolon, ";")
+    }
+
+    pub fn new_lparen() -> Self {
+        Self::new(TokenType::LParen, "(")
+    }
+
+    pub fn new_rparen() -> Self {
+        Self::new(TokenType::RParen, ")")
+    }
+
+    pub fn new_lbrace() -> Self {
+        Self::new(TokenType::LBrace, "{")
+    }
+
+    pub fn new_rbrace() -> Self {
+        Self::new(TokenType::RBrace, "}")
+    }
+
+    pub fn new_fun() -> Self {
+        Self::new(TokenType::Function, "fn")
+    }
+    pub fn new_let() -> Self {
+        Self::new(TokenType::Let, "let")
+    }
+
+    pub fn new_true() -> Self {
+        Self::new(TokenType::True, "true")
+    }
+
+    pub fn new_false() -> Self {
+        Self::new(TokenType::False, "false")
+    }
+
+    pub fn new_if() -> Self {
+        Self::new(TokenType::If, "if")
+    }
+
+    pub fn new_else() -> Self {
+        Self::new(TokenType::Else, "else")
+    }
+
+    pub fn new_return() -> Self {
+        Self::new(TokenType::Return, "return")
     }
 }

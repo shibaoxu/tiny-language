@@ -4,7 +4,9 @@
 
 pub mod lexer;
 pub mod parser;
+pub mod ast;
+pub mod repl;
 
 pub use lexer::Lexer;
-pub use lexer::Token;
-pub use lexer::repl;
+pub use lexer::TokenType;
+// pub use lexer::ast;
