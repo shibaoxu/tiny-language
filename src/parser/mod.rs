@@ -580,8 +580,8 @@ mod tests {
     #[test]
     fn test_if_expression_work() {
         let cases = vec![
-            ("if (x<y) { x }", "if (x < y) {x\n}"),
-            ("if (x<y) { x } else { y }", "if (x < y) {x\n} else {y\n}"),
+            ("if (x<y) { x }", "if (x < y) {x}"),
+            ("if (x<y) { x } else { y }", "if (x < y) {x} else {y}"),
         ];
         run_cases(&cases);
     }

@@ -1,7 +1,4 @@
 use std::io::{BufRead, Write};
-use crate::ast::Program;
-use crate::lexer::Lexer;
-use crate::TokenType;
 use crate::parser::{Parser, ParsingError};
 
 static PROMPT: &str = ">> ";
@@ -17,7 +14,6 @@ pub fn start<I, O>(input: &mut I, output: &mut O)
         output.flush().unwrap();
         input.read_line(&mut buf).unwrap();
 
-        // let mut lexer = Lexer::from_str(&buf);
         let mut parser = Parser::from_string(&buf);
         let program = parser.parse();
         if parser.errors.len() != 0{
