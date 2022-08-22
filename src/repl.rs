@@ -1,4 +1,5 @@
 use std::io::{BufRead, Write};
+use crate::evaluator::eval;
 use crate::parser::{Parser, ParsingError};
 
 static PROMPT: &str = ">> ";
@@ -20,7 +21,9 @@ pub fn start<I, O>(input: &mut I, output: &mut O)
             print_parser_errors(&parser.errors, output);
             continue;
         }
-        output.write(program.to_string().as_bytes()).unwrap();
+        let result = eval(&program);
+
+        output.write(result.inspect().as_bytes()).unwrap();
         output.write(b"\n").unwrap();
         output.flush().unwrap();
     }

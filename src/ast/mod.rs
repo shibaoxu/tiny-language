@@ -1,7 +1,8 @@
+use std::any::Any;
 use std::fmt::{Display, Formatter};
 use crate::lexer::token::Token;
 
-pub trait Node: Display {
+pub trait Node: Display + Any {
     fn token_literal(&self) -> String;
 }
 
@@ -269,7 +270,7 @@ impl Display for FunctionLiteral {
 
 impl Expression for FunctionLiteral {}
 
-pub struct CallExpression{
+pub struct CallExpression {
     pub token: Token,
     pub function: Box<dyn Expression>,
     pub arguments: Vec<Box<dyn Expression>>,
@@ -288,7 +289,7 @@ impl Display for CallExpression {
     }
 }
 
-impl Expression for CallExpression{}
+impl Expression for CallExpression {}
 
 #[cfg(test)]
 mod tests {
