@@ -1,7 +1,6 @@
 #![feature(seek_stream_len)]
 #![feature(trait_upcasting)]
-// #[]
-// extern crate core;
+#![allow(incomplete_features)]
 
 extern crate core;
 

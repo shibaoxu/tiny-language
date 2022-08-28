@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
@@ -175,5 +176,41 @@ impl Token {
 
     pub fn new_return() -> Self {
         Self::new(TokenType::Return, "return")
+    }
+}
+
+impl Display for TokenType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            TokenType::Illegal => "illegal",
+            TokenType::EOF => "eof",
+            TokenType::Identity => "identity",
+            TokenType::Int => "INTEGER",
+            TokenType::Assign => "=",
+            TokenType::Plus => "+",
+            TokenType::Minus => "-",
+            TokenType::Bang => "!",
+            TokenType::Asterisk => "*",
+            TokenType::Slash => "/",
+            TokenType::LT => "<",
+            TokenType::GT => ">",
+            TokenType::EQ => "==",
+            TokenType::NotEq => "!=",
+            TokenType::LE => "<=",
+            TokenType::GE => ">=",
+            TokenType::Comma => ",",
+            TokenType::Semicolon => ";",
+            TokenType::LParen => "(",
+            TokenType::RParen => ")",
+            TokenType::LBrace => "{",
+            TokenType::RBrace => "}",
+            TokenType::Function => "fn",
+            TokenType::Let => "let",
+            TokenType::True => "true",
+            TokenType::False => "false",
+            TokenType::If => "if",
+            TokenType::Else => "else",
+            TokenType::Return => "return",
+        })
     }
 }

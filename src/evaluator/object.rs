@@ -1,14 +1,25 @@
-use std::any::{Any, TypeId};
-use std::fmt::{Debug, Display, format, Formatter};
-use std::marker::PhantomData;
-use crate::evaluator::object::ObjectType::{Boolean, Null};
-use crate::TokenType;
+use std::any::Any;
+use std::fmt::{Debug, Display, Formatter};
+
+use crate::evaluator::object::ObjectType::{Boolean, Error, Integer, Null};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum ObjectType {
     Integer,
     Boolean,
     Null,
+    Error,
+}
+
+impl Display for ObjectType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self{
+            Integer => "INTEGER",
+            Boolean => "BOOLEAN",
+            Null => "NULL",
+            Error => "ERROR"
+        })
+    }
 }
 
 pub trait Object: Any {
@@ -99,5 +110,34 @@ impl Object for NullObject {
 
     fn set_return(&mut self) {
         self.0 = true;
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct ErrorObject{
+    pub message: String,
+}
+
+impl Object for ErrorObject {
+    fn object_type(&self) -> ObjectType {
+        ObjectType::Error
+    }
+
+    fn inspect(&self) -> String {
+        format!("{}", self.message)
+    }
+
+    fn is_return(&self) -> bool {
+        true
+    }
+
+    fn set_return(&mut self) {}
+}
+
+impl ErrorObject {
+    pub fn from(message: &str) ->Self{
+        Self{
+            message: message.to_string()
+        }
     }
 }

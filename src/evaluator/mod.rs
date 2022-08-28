@@ -1,7 +1,6 @@
 use std::any::{Any, TypeId};
-use std::arch::aarch64::vreinterpret_u8_f64;
-use crate::ast::{BlockStatement, BooleanLiteral, Expression, ExpressionStatement, IfExpression, InfixExpression, IntegerLiteral, LetStatement, Node, PrefixExpression, Program, ReturnStatement, Statement};
-use crate::evaluator::object::{BooleanObject, IntegerObject, NullObject, Object, ObjectType};
+use crate::ast::{BlockStatement, BooleanLiteral, ExpressionStatement, IfExpression, InfixExpression, IntegerLiteral, LetStatement, Node, PrefixExpression, Program, ReturnStatement, Statement};
+use crate::evaluator::object::{BooleanObject, ErrorObject, IntegerObject, NullObject, Object, ObjectType};
 use crate::evaluator::object::ObjectType::Boolean;
 use crate::TokenType;
 
@@ -12,7 +11,6 @@ pub fn eval(node: &dyn Node) -> Box<dyn Object> {
     let type_id = value_any.type_id();
     return if type_id == TypeId::of::<Program>() {
         let program = value_any.downcast_ref::<Program>().unwrap();
-        // eval_program(&program)
         eval_statements(&program.statements)
     } else if type_id == TypeId::of::<ExpressionStatement>() {
         let exp_statement = value_any.downcast_ref::<ExpressionStatement>().unwrap();
@@ -26,19 +24,25 @@ pub fn eval(node: &dyn Node) -> Box<dyn Object> {
     } else if type_id == TypeId::of::<PrefixExpression>() {
         let prefix_exp = value_any.downcast_ref::<PrefixExpression>().unwrap();
         let right = eval(prefix_exp.right.as_ref());
+        if right.object_type() == ObjectType::Error{
+            return right;
+        }
         match prefix_exp.token.token_type {
             TokenType::Bang => eval_bang_operator_expression(right),
             TokenType::Minus => eval_minus_operator_expression(right),
-            _ => {
-                //todo: 语法错误
-                Box::new(NullObject(false))
-            }
+            _ => Box::new(ErrorObject::from(&format!("unknown operator: {}", prefix_exp.token.token_type)))
         }
     } else if type_id == TypeId::of::<InfixExpression>() {
         let infix_exp = value_any.downcast_ref::<InfixExpression>().unwrap();
         let left = eval(infix_exp.left.as_ref());
+        if left.object_type() == ObjectType::Error{
+            return left;
+        }
         let right = eval(infix_exp.right.as_ref());
-        eval_infix_expression(infix_exp.token.token_type, left.as_ref(), right.as_ref())
+        if right.object_type() == ObjectType::Error{
+            return right;
+        }
+        eval_infix_expression(infix_exp.token.token_type, left, right)
     } else if type_id == TypeId::of::<IfExpression>() {
         let if_exp = value_any.downcast_ref::<IfExpression>().unwrap();
         eval_if_expression(if_exp)
@@ -53,16 +57,16 @@ pub fn eval(node: &dyn Node) -> Box<dyn Object> {
     } else if type_id == TypeId::of::<LetStatement>() {
         let let_statement = value_any.downcast_ref::<LetStatement>().unwrap();
         eval(let_statement.value.as_ref())
-    }else {
-        Box::new(NullObject(false))
+    } else {
+        Box::new(ErrorObject::from(&format!("unknown syntax tree node {}", node.to_string())))
     };
 }
 
-fn eval_statements(stmts: &Vec<Box<dyn Statement>>) -> Box<dyn Object>{
+fn eval_statements(stmts: &Vec<Box<dyn Statement>>) -> Box<dyn Object> {
     let mut result: Box<dyn Object> = Box::new(NullObject(false));
-    for stmt in stmts.iter().map(|e| e.as_ref()){
+    for stmt in stmts.iter().map(|e| e.as_ref()) {
         result = eval(stmt);
-        if result.is_return(){
+        if result.is_return() {
             return result;
         }
     }
@@ -71,76 +75,81 @@ fn eval_statements(stmts: &Vec<Box<dyn Statement>>) -> Box<dyn Object>{
 
 fn eval_bang_operator_expression(right: Box<dyn Object>) -> Box<dyn Object> {
     let right_any = right.as_ref() as &dyn Any;
-    let type_id = right_any.type_id();
-    if type_id == TypeId::of::<BooleanObject>() {
-        let actual = right_any.downcast_ref::<BooleanObject>().unwrap();
-        Box::new(BooleanObject::from(!actual.value))
-    } else if type_id == TypeId::of::<IntegerObject>() {
-        let actual = right_any.downcast_ref::<IntegerObject>().unwrap();
-        match actual.value {
-            0 => Box::new(BooleanObject::from(true)),
-            _ => Box::new(BooleanObject::from(false)),
+    match right.object_type() {
+        ObjectType::Integer => {
+            let actual = right_any.downcast_ref::<IntegerObject>().unwrap();
+            match actual.value {
+                0 => Box::new(BooleanObject::from(true)),
+                _ => Box::new(BooleanObject::from(false)),
+            }
         }
-    } else if type_id == TypeId::of::<NullObject>() {
-        Box::new(BooleanObject::from(true))
-    } else {
-        //todo: 语法错误
-        Box::new(NullObject(false))
+        ObjectType::Boolean => {
+            let actual = right_any.downcast_ref::<BooleanObject>().unwrap();
+            Box::new(BooleanObject::from(!actual.value))
+        }
+        ObjectType::Null => Box::new(BooleanObject::from(true)),
+        ObjectType::Error => right,
     }
 }
 
 fn eval_minus_operator_expression(right: Box<dyn Object>) -> Box<dyn Object> {
     let right_any = right.as_ref() as &dyn Any;
-    let type_id = right_any.type_id();
-    if type_id == TypeId::of::<IntegerObject>() {
-        let actual = right_any.downcast_ref::<IntegerObject>().unwrap();
-        Box::new(IntegerObject::from(-actual.value))
-    } else {
-        //todo: 语法错误
-        Box::new(NullObject(false))
+    match right.object_type() {
+        ObjectType::Integer => {
+            let actual = right_any.downcast_ref::<IntegerObject>().unwrap();
+            Box::new(IntegerObject::from(-actual.value))
+        }
+        ObjectType::Error => right,
+        _ => Box::new(ErrorObject::from(&format!("unknown operator: -{}", right.object_type())))
     }
 }
 
-fn eval_infix_expression(operator: TokenType, left: &dyn Object, right: &dyn Object) -> Box<dyn Object> {
-    let left_any = left as &dyn Any;
-    let right_any = right as &dyn Any;
-    if left_any.type_id() != right_any.type_id() {
-        //todo: syntax error
-        return Box::new(NullObject(false));
+fn eval_infix_expression(operator: TokenType, left: Box<dyn Object>, right: Box<dyn Object>) -> Box<dyn Object> {
+    if left.object_type() != right.object_type() {
+        return Box::new(ErrorObject::from(&format!("type mismatch: {} {} {}", left.object_type(), operator, right.object_type())));
     }
 
-    if left_any.type_id() == TypeId::of::<IntegerObject>() {
-        let left_int = left_any.downcast_ref::<IntegerObject>().unwrap();
-        let right_int = right_any.downcast_ref::<IntegerObject>().unwrap();
-        match operator {
-            TokenType::Plus => Box::new(IntegerObject::from(left_int.value + right_int.value)) as Box<dyn Object>,
-            TokenType::Minus => Box::new(IntegerObject::from(left_int.value - right_int.value)) as Box<dyn Object>,
-            TokenType::Asterisk => Box::new(IntegerObject::from(left_int.value * right_int.value)) as Box<dyn Object>,
-            TokenType::Slash => Box::new(IntegerObject::from(left_int.value / right_int.value)) as Box<dyn Object>,
-            TokenType::GT => Box::new(BooleanObject::from(left_int.value > right_int.value)) as Box<dyn Object>,
-            TokenType::GE => Box::new(BooleanObject::from(left_int.value >= right_int.value)) as Box<dyn Object>,
-            TokenType::LT => Box::new(BooleanObject::from(left_int.value < right_int.value)) as Box<dyn Object>,
-            TokenType::LE => Box::new(BooleanObject::from(left_int.value <= right_int.value)) as Box<dyn Object>,
-            TokenType::EQ => Box::new(BooleanObject::from(left_int.value == right_int.value)) as Box<dyn Object>,
-            TokenType::NotEq => Box::new(BooleanObject::from(left_int.value != right_int.value)) as Box<dyn Object>,
-            _ => Box::new(NullObject(false)) as Box<dyn Object>,
+    let left_any = left.as_ref() as &dyn Any;
+    let right_any = right.as_ref() as &dyn Any;
+    match left.object_type() {
+        ObjectType::Integer => {
+            let left_int = left_any.downcast_ref::<IntegerObject>().unwrap();
+            let right_int = right_any.downcast_ref::<IntegerObject>().unwrap();
+            match operator {
+                TokenType::Plus => Box::new(IntegerObject::from(left_int.value + right_int.value)) as Box<dyn Object>,
+                TokenType::Minus => Box::new(IntegerObject::from(left_int.value - right_int.value)) as Box<dyn Object>,
+                TokenType::Asterisk => Box::new(IntegerObject::from(left_int.value * right_int.value)) as Box<dyn Object>,
+                TokenType::Slash => Box::new(IntegerObject::from(left_int.value / right_int.value)) as Box<dyn Object>,
+                TokenType::GT => Box::new(BooleanObject::from(left_int.value > right_int.value)) as Box<dyn Object>,
+                TokenType::GE => Box::new(BooleanObject::from(left_int.value >= right_int.value)) as Box<dyn Object>,
+                TokenType::LT => Box::new(BooleanObject::from(left_int.value < right_int.value)) as Box<dyn Object>,
+                TokenType::LE => Box::new(BooleanObject::from(left_int.value <= right_int.value)) as Box<dyn Object>,
+                TokenType::EQ => Box::new(BooleanObject::from(left_int.value == right_int.value)) as Box<dyn Object>,
+                TokenType::NotEq => Box::new(BooleanObject::from(left_int.value != right_int.value)) as Box<dyn Object>,
+                _ => Box::new(ErrorObject::from(&format!("unknown operator: {} {} {}", left.object_type(), operator, right.object_type()))),
+            }
         }
-    } else if left_any.type_id() == TypeId::of::<BooleanObject>() {
-        let left_bool = left_any.downcast_ref::<BooleanObject>().unwrap();
-        let right_bool = right_any.downcast_ref::<BooleanObject>().unwrap();
-        match operator {
-            TokenType::EQ => Box::new(BooleanObject::from(left_bool.value == right_bool.value)) as Box<dyn Object>,
-            TokenType::NotEq => Box::new(BooleanObject::from(left_bool.value != right_bool.value)) as Box<dyn Object>,
-            _ => Box::new(NullObject(false)) as Box<dyn Object>,
+        ObjectType::Boolean => {
+            let left_bool = left_any.downcast_ref::<BooleanObject>().unwrap();
+            let right_bool = right_any.downcast_ref::<BooleanObject>().unwrap();
+            match operator {
+                TokenType::EQ => Box::new(BooleanObject::from(left_bool.value == right_bool.value)) as Box<dyn Object>,
+                TokenType::NotEq => Box::new(BooleanObject::from(left_bool.value != right_bool.value)) as Box<dyn Object>,
+                _ => Box::new(ErrorObject::from(&format!("unknown operator: {} {} {}", left.object_type(), operator, right.object_type()))),
+            }
         }
-    } else {
-        //todo: syntax error
-        Box::new(NullObject(false)) as Box<dyn Object>
+        ObjectType::Null => Box::new(ErrorObject::from(&format!("unknown operator: {} {} {}", left.object_type(), operator, right.object_type()))) as Box<dyn Object>,
+        ObjectType::Error => left,
     }
 }
 
 fn eval_if_expression(if_exp: &IfExpression) -> Box<dyn Object> {
-    if is_truthy(&if_exp.condition) {
+    let condition = eval(if_exp.condition.as_ref());
+    if condition.object_type() == ObjectType::Error {
+        return condition;
+    }
+
+    if is_truthy(&condition) {
         eval(&if_exp.consequence)
     } else {
         match &if_exp.alternative {
@@ -150,12 +159,11 @@ fn eval_if_expression(if_exp: &IfExpression) -> Box<dyn Object> {
     }
 }
 
-fn is_truthy(condition: &Box<dyn Expression>) -> bool {
-    let condition = eval(condition.as_ref());
-    let condition_any = condition.as_ref() as &dyn Any;
-    if condition_any.type_id() == TypeId::of::<BooleanObject>() {
+fn is_truthy(condition: &Box<dyn Object>) -> bool {
+    if condition.object_type() == Boolean {
+        let condition_any = condition.as_ref() as &dyn Any;
         condition_any.downcast_ref::<BooleanObject>().unwrap().value
-    } else if condition_any.type_id() == TypeId::of::<NullObject>() {
+    } else if condition.object_type() == ObjectType::Null {
         false
     } else {
         true
@@ -164,10 +172,10 @@ fn is_truthy(condition: &Box<dyn Expression>) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::any::{Any, TypeId};
+    use std::any::Any;
     use std::fmt::Debug;
     use crate::evaluator::eval;
-    use crate::evaluator::object::{BooleanObject, IntegerObject, NullObject, Object, ObjectType};
+    use crate::evaluator::object::{BooleanObject, ErrorObject, IntegerObject, NullObject, Object, ObjectType};
     use crate::evaluator::object::ObjectType::Boolean;
     use crate::parser::Parser;
 
@@ -286,6 +294,33 @@ mod tests {
         run_cases(&cases);
     }
 
+    #[test]
+    fn test_string(){
+        let a = "a".to_string();
+        let b = "a".to_string();
+        println!("{}", a==b);
+    }
+    #[test]
+    fn test_error_handling() {
+        let cases = vec![
+            ("5 + true;",  ErrorObject::from("type mismatch: INTEGER + BOOLEAN")),
+            ("5 + true; 5;", ErrorObject::from("type mismatch: INTEGER + BOOLEAN")),
+            ("-true", ErrorObject::from("unknown operator: -BOOLEAN")),
+            ("true + false;", ErrorObject::from("unknown operator: BOOLEAN + BOOLEAN")),
+            ("true + false + true + false;", ErrorObject::from("unknown operator: BOOLEAN + BOOLEAN")),
+            ("5; true + false; 5", ErrorObject::from("unknown operator: BOOLEAN + BOOLEAN")),
+            ("if (10 > 1) { true + false; }", ErrorObject::from("unknown operator: BOOLEAN + BOOLEAN")),
+            ("if (10 > 1) {
+                if (10 > 1) {
+                  return true + false;
+                }
+                return 1;
+             }", ErrorObject::from("unknown operator: BOOLEAN + BOOLEAN" )),
+            // ("foobar", ErrorObject::from("identifier not found: foobar")),
+        ];
+        run_cases(&cases);
+    }
+
     fn run_cases<T: Object + Debug>(cases: &Vec<(&str, T)>) {
         for (no, case) in cases.iter().enumerate() {
             let mut parser = Parser::from_string(case.0);
@@ -297,25 +332,18 @@ mod tests {
     }
 
     fn equal(left: &dyn Object, right: &dyn Object) -> bool {
-        let left_any = left as &dyn Any;
-        let right_any = right as &dyn Any;
 
-        let a = left_any.type_id();
-        let b = right_any.type_id();
-
-        let type_id = left.type_id();
-        if left.type_id() != right.type_id() {
+        if left.object_type() != right.object_type(){
             return false;
         }
-
         let left_any = left as &dyn Any;
         let right_any = right as &dyn Any;
-        return if type_id == TypeId::of::<BooleanObject>() {
-            left_any.downcast_ref::<BooleanObject>().unwrap().value == right_any.downcast_ref::<BooleanObject>().unwrap().value
-        } else if type_id == TypeId::of::<IntegerObject>() {
-            left_any.downcast_ref::<IntegerObject>().unwrap().value == right_any.downcast_ref::<IntegerObject>().unwrap().value
-        } else {
-            true
-        };
+
+        match left.object_type(){
+            ObjectType::Integer => left_any.downcast_ref::<IntegerObject>().unwrap().value == right_any.downcast_ref::<IntegerObject>().unwrap().value,
+            Boolean => left_any.downcast_ref::<BooleanObject>().unwrap().value == right_any.downcast_ref::<BooleanObject>().unwrap().value,
+            ObjectType::Null => true,
+            ObjectType::Error => left_any.downcast_ref::<ErrorObject>().unwrap().message == right_any.downcast_ref::<ErrorObject>().unwrap().message,
+        }
     }
 }
