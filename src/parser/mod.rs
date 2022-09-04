@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Cursor, Seek};
+use std::rc::Rc;
 use std::str::FromStr;
 use thiserror::Error;
 use crate::{Lexer, TokenType};
@@ -279,7 +280,7 @@ impl<T: BufRead + Seek> Parser<T> {
         Some(Box::new(FunctionLiteral {
             token: Token::new_fun(),
             parameters: parameters.unwrap(),
-            body: body.unwrap(),
+            body: Rc::new(body.unwrap()),
         }))
     }
 

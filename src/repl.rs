@@ -1,4 +1,5 @@
 use std::io::{BufRead, Write};
+use crate::evaluator::environment::Environment;
 use crate::evaluator::eval;
 use crate::parser::{Parser, ParsingError};
 
@@ -8,6 +9,8 @@ pub fn start<I, O>(input: &mut I, output: &mut O)
     where I: BufRead,
           O: Write
 {
+    let mut env = Environment::new();
+
     loop {
         let mut buf = String::new();
 
@@ -21,7 +24,8 @@ pub fn start<I, O>(input: &mut I, output: &mut O)
             print_parser_errors(&parser.errors, output);
             continue;
         }
-        let result = eval(&program);
+
+        let result = eval(&program, &mut env);
 
         output.write(result.inspect().as_bytes()).unwrap();
         output.write(b"\n").unwrap();

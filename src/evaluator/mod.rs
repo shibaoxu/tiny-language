@@ -1,20 +1,22 @@
 use std::any::{Any, TypeId};
-use crate::ast::{BlockStatement, BooleanLiteral, ExpressionStatement, IfExpression, InfixExpression, IntegerLiteral, LetStatement, Node, PrefixExpression, Program, ReturnStatement, Statement};
-use crate::evaluator::object::{BooleanObject, ErrorObject, IntegerObject, NullObject, Object, ObjectType};
+use crate::ast::{BlockStatement, BooleanLiteral, CallExpression, Expression, ExpressionStatement, FunctionLiteral, Identifier, IfExpression, InfixExpression, IntegerLiteral, LetStatement, Node, PrefixExpression, Program, ReturnStatement, Statement};
+use crate::evaluator::environment::Environment;
+use crate::evaluator::object::{BooleanObject, clone_box, ErrorObject, FunctionObject, IntegerObject, NullObject, Object, ObjectType};
 use crate::evaluator::object::ObjectType::Boolean;
 use crate::TokenType;
 
 mod object;
+pub mod environment;
 
-pub fn eval(node: &dyn Node) -> Box<dyn Object> {
+pub fn eval(node: &dyn Node, env: &mut Environment) -> Box<dyn Object> {
     let value_any = node as &dyn Any;
     let type_id = value_any.type_id();
     return if type_id == TypeId::of::<Program>() {
         let program = value_any.downcast_ref::<Program>().unwrap();
-        eval_statements(&program.statements)
+        eval_statements(&program.statements, env)
     } else if type_id == TypeId::of::<ExpressionStatement>() {
         let exp_statement = value_any.downcast_ref::<ExpressionStatement>().unwrap();
-        eval(exp_statement.expression.as_ref())
+        eval(exp_statement.expression.as_ref(), env)
     } else if type_id == TypeId::of::<IntegerLiteral>() {
         let integer_literal = value_any.downcast_ref::<IntegerLiteral>().unwrap();
         Box::new(IntegerObject::from(integer_literal.value))
@@ -23,49 +25,83 @@ pub fn eval(node: &dyn Node) -> Box<dyn Object> {
         Box::new(BooleanObject::from(bool_literal.value))
     } else if type_id == TypeId::of::<PrefixExpression>() {
         let prefix_exp = value_any.downcast_ref::<PrefixExpression>().unwrap();
-        let right = eval(prefix_exp.right.as_ref());
-        if right.object_type() == ObjectType::Error{
+        let right = eval(prefix_exp.right.as_ref(), env);
+        if right.object_type() == ObjectType::Error {
             return right;
         }
         match prefix_exp.token.token_type {
-            TokenType::Bang => eval_bang_operator_expression(right),
-            TokenType::Minus => eval_minus_operator_expression(right),
+            TokenType::Bang => eval_bang_operator_expression(right, env),
+            TokenType::Minus => eval_minus_operator_expression(right, env),
             _ => Box::new(ErrorObject::from(&format!("unknown operator: {}", prefix_exp.token.token_type)))
         }
     } else if type_id == TypeId::of::<InfixExpression>() {
         let infix_exp = value_any.downcast_ref::<InfixExpression>().unwrap();
-        let left = eval(infix_exp.left.as_ref());
-        if left.object_type() == ObjectType::Error{
+        let left = eval(infix_exp.left.as_ref(), env);
+        if left.object_type() == ObjectType::Error {
             return left;
         }
-        let right = eval(infix_exp.right.as_ref());
-        if right.object_type() == ObjectType::Error{
+        let right = eval(infix_exp.right.as_ref(), env);
+        if right.object_type() == ObjectType::Error {
             return right;
         }
-        eval_infix_expression(infix_exp.token.token_type, left, right)
+        eval_infix_expression(infix_exp.token.token_type, left, right, env)
     } else if type_id == TypeId::of::<IfExpression>() {
         let if_exp = value_any.downcast_ref::<IfExpression>().unwrap();
-        eval_if_expression(if_exp)
+        eval_if_expression(if_exp, env)
     } else if type_id == TypeId::of::<BlockStatement>() {
         let block = value_any.downcast_ref::<BlockStatement>().unwrap();
-        eval_statements(&block.statements)
+        eval_statements(&block.statements, env)
     } else if type_id == TypeId::of::<ReturnStatement>() {
         let ret = value_any.downcast_ref::<ReturnStatement>().unwrap();
-        let mut val = eval(ret.value.as_ref());
+        let mut val = eval(ret.value.as_ref(), env);
         val.set_return();
         val
     } else if type_id == TypeId::of::<LetStatement>() {
         let let_statement = value_any.downcast_ref::<LetStatement>().unwrap();
-        eval(let_statement.value.as_ref())
-    } else {
+        let val = eval(let_statement.value.as_ref(), env);
+        if val.object_type() == ObjectType::Error {
+            return val;
+        }
+        env.set(&let_statement.name.token.literal, clone_box(&val));
+        val
+    } else if type_id == TypeId::of::<Identifier>() {
+        let identifier = value_any.downcast_ref::<Identifier>().unwrap();
+        eval_identifier(identifier, env)
+    } else if type_id == TypeId::of::<FunctionLiteral>() {
+        let func_literal = value_any.downcast_ref::<FunctionLiteral>().unwrap();
+        Box::new(FunctionObject {
+            parameters: func_literal.parameters.clone(),
+            body: func_literal.body.clone(),
+            env: env.clone(),
+            is_return: false,
+        })
+    } else if type_id == TypeId::of::<CallExpression>() {
+        let call_exp = value_any.downcast_ref::<CallExpression>().unwrap();
+        let func = eval(call_exp.function.as_ref(), env);
+        let args = eval_expressions(&call_exp.arguments,env);
+
+        Box::new(ErrorObject::from(&format!("unknown syntax tree node {}", node.to_string())))
+    }else {
         Box::new(ErrorObject::from(&format!("unknown syntax tree node {}", node.to_string())))
     };
 }
 
-fn eval_statements(stmts: &Vec<Box<dyn Statement>>) -> Box<dyn Object> {
+fn eval_expressions(expressions: &Vec<Box<dyn Expression>>, env: &mut Environment) -> Vec<Box<dyn Object>>{
+    let mut result = vec![];
+    for exp in expressions.iter().map(|e| e.as_ref()){
+        let arg = eval(exp, env);
+        if arg.object_type() == ObjectType::Error{
+            return vec![arg]
+        }
+        result.push(arg);
+    }
+    result
+}
+
+fn eval_statements(stmts: &Vec<Box<dyn Statement>>, env: &mut Environment) -> Box<dyn Object> {
     let mut result: Box<dyn Object> = Box::new(NullObject(false));
     for stmt in stmts.iter().map(|e| e.as_ref()) {
-        result = eval(stmt);
+        result = eval(stmt, env);
         if result.is_return() {
             return result;
         }
@@ -73,7 +109,7 @@ fn eval_statements(stmts: &Vec<Box<dyn Statement>>) -> Box<dyn Object> {
     result
 }
 
-fn eval_bang_operator_expression(right: Box<dyn Object>) -> Box<dyn Object> {
+fn eval_bang_operator_expression(right: Box<dyn Object>, env: &mut Environment) -> Box<dyn Object> {
     let right_any = right.as_ref() as &dyn Any;
     match right.object_type() {
         ObjectType::Integer => {
@@ -88,11 +124,12 @@ fn eval_bang_operator_expression(right: Box<dyn Object>) -> Box<dyn Object> {
             Box::new(BooleanObject::from(!actual.value))
         }
         ObjectType::Null => Box::new(BooleanObject::from(true)),
+        ObjectType::Function => Box::new(BooleanObject::from(false)),
         ObjectType::Error => right,
     }
 }
 
-fn eval_minus_operator_expression(right: Box<dyn Object>) -> Box<dyn Object> {
+fn eval_minus_operator_expression(right: Box<dyn Object>, _env: &mut Environment) -> Box<dyn Object> {
     let right_any = right.as_ref() as &dyn Any;
     match right.object_type() {
         ObjectType::Integer => {
@@ -104,7 +141,7 @@ fn eval_minus_operator_expression(right: Box<dyn Object>) -> Box<dyn Object> {
     }
 }
 
-fn eval_infix_expression(operator: TokenType, left: Box<dyn Object>, right: Box<dyn Object>) -> Box<dyn Object> {
+fn eval_infix_expression(operator: TokenType, left: Box<dyn Object>, right: Box<dyn Object>, _env: &mut Environment) -> Box<dyn Object> {
     if left.object_type() != right.object_type() {
         return Box::new(ErrorObject::from(&format!("type mismatch: {} {} {}", left.object_type(), operator, right.object_type())));
     }
@@ -140,22 +177,31 @@ fn eval_infix_expression(operator: TokenType, left: Box<dyn Object>, right: Box<
         }
         ObjectType::Null => Box::new(ErrorObject::from(&format!("unknown operator: {} {} {}", left.object_type(), operator, right.object_type()))) as Box<dyn Object>,
         ObjectType::Error => left,
+        ObjectType::Function => Box::new(ErrorObject::from(&format!("unknown operator: {} {} {}", left.object_type(), operator, right.object_type()))) as Box<dyn Object>,
     }
 }
 
-fn eval_if_expression(if_exp: &IfExpression) -> Box<dyn Object> {
-    let condition = eval(if_exp.condition.as_ref());
+fn eval_if_expression(if_exp: &IfExpression, env: &mut Environment) -> Box<dyn Object> {
+    let condition = eval(if_exp.condition.as_ref(), env);
     if condition.object_type() == ObjectType::Error {
         return condition;
     }
 
     if is_truthy(&condition) {
-        eval(&if_exp.consequence)
+        eval(&if_exp.consequence, env)
     } else {
         match &if_exp.alternative {
-            Some(alt) => eval(alt),
+            Some(alt) => eval(alt, env),
             _ => Box::new(NullObject(false))
         }
+    }
+}
+
+fn eval_identifier(identifier: &Identifier, env: &mut Environment) -> Box<dyn Object> {
+    let token = identifier.token.clone();
+    match env.get(&token.literal) {
+        Some(value) => clone_box(value),
+        _ => Box::new(ErrorObject::from(&format!("identifier not found: {}", token.literal))) as Box<dyn Object>
     }
 }
 
@@ -169,15 +215,22 @@ fn is_truthy(condition: &Box<dyn Object>) -> bool {
         true
     }
 }
+// }
+
 
 #[cfg(test)]
 mod tests {
     use std::any::Any;
     use std::fmt::Debug;
+    use std::rc::Rc;
+    use crate::ast::{BlockStatement, Identifier};
+    use crate::evaluator::environment::Environment;
     use crate::evaluator::eval;
-    use crate::evaluator::object::{BooleanObject, ErrorObject, IntegerObject, NullObject, Object, ObjectType};
+    use crate::evaluator::object::{BooleanObject, ErrorObject, FunctionObject, IntegerObject, NullObject, Object, ObjectType};
     use crate::evaluator::object::ObjectType::Boolean;
+    use crate::lexer::token::Token;
     use crate::parser::Parser;
+    use crate::TokenType;
 
     #[test]
     fn test_eval_integer_expression() {
@@ -295,15 +348,20 @@ mod tests {
     }
 
     #[test]
-    fn test_string(){
-        let a = "a".to_string();
-        let b = "a".to_string();
-        println!("{}", a==b);
+    fn test_let_statements() {
+        let cases = vec![
+            ("let a = 5; a;", IntegerObject::from(5)),
+            ("let a = 5 * 5; a;", IntegerObject::from(25)),
+            ("let a = 5; let b = a; b;", IntegerObject::from(5)),
+            ("let a = 5; let b = a; let c = a + b + 5; c;", IntegerObject::from(15)),
+        ];
+        run_cases(&cases);
     }
+
     #[test]
     fn test_error_handling() {
         let cases = vec![
-            ("5 + true;",  ErrorObject::from("type mismatch: INTEGER + BOOLEAN")),
+            ("5 + true;", ErrorObject::from("type mismatch: INTEGER + BOOLEAN")),
             ("5 + true; 5;", ErrorObject::from("type mismatch: INTEGER + BOOLEAN")),
             ("-true", ErrorObject::from("unknown operator: -BOOLEAN")),
             ("true + false;", ErrorObject::from("unknown operator: BOOLEAN + BOOLEAN")),
@@ -315,10 +373,27 @@ mod tests {
                   return true + false;
                 }
                 return 1;
-             }", ErrorObject::from("unknown operator: BOOLEAN + BOOLEAN" )),
-            // ("foobar", ErrorObject::from("identifier not found: foobar")),
+             }", ErrorObject::from("unknown operator: BOOLEAN + BOOLEAN")),
+            ("foobar", ErrorObject::from("identifier not found: foobar")),
         ];
         run_cases(&cases);
+    }
+
+    #[test]
+    fn test_function_literal(){
+        let cases = vec![
+            ("fn(x) { x + 2}", "fn(x){(x + 2)}"),
+        ];
+        for (no, &case) in cases.iter().enumerate() {
+            let mut parser = Parser::from_string(case.0);
+            let program = parser.parse();
+            assert_eq!(parser.errors.len(), 0);
+            let mut env = Environment::new();
+            let result = eval(&program, &mut env);
+            assert_eq!(result.inspect(), case.1);
+        }
+
+
     }
 
     fn run_cases<T: Object + Debug>(cases: &Vec<(&str, T)>) {
@@ -326,24 +401,25 @@ mod tests {
             let mut parser = Parser::from_string(case.0);
             let program = parser.parse();
             assert_eq!(parser.errors.len(), 0);
-            let result = eval(&program);
+            let mut env = Environment::new();
+            let result = eval(&program, &mut env);
             assert!(equal(result.as_ref(), &case.1), "{}: actual is {:?}, expected is {:?}", no, result.inspect(), case.1)
         }
     }
 
     fn equal(left: &dyn Object, right: &dyn Object) -> bool {
-
-        if left.object_type() != right.object_type(){
+        if left.object_type() != right.object_type() {
             return false;
         }
         let left_any = left as &dyn Any;
         let right_any = right as &dyn Any;
 
-        match left.object_type(){
+        match left.object_type() {
             ObjectType::Integer => left_any.downcast_ref::<IntegerObject>().unwrap().value == right_any.downcast_ref::<IntegerObject>().unwrap().value,
             Boolean => left_any.downcast_ref::<BooleanObject>().unwrap().value == right_any.downcast_ref::<BooleanObject>().unwrap().value,
             ObjectType::Null => true,
             ObjectType::Error => left_any.downcast_ref::<ErrorObject>().unwrap().message == right_any.downcast_ref::<ErrorObject>().unwrap().message,
+            ObjectType::Function => false,
         }
     }
 }

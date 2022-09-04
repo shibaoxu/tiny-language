@@ -1,5 +1,22 @@
+//
+//                          |-- LetStatement
+//     |------ Statement--- |-- ExpressionStatement
+//     |                    |-- ReturnStatement
+//     |                    |-- BlockStatement
+//     |
+// Node|----- Program
+//     |                    |-- Identifier
+//     |                    |-- BooleanLiteral
+//     |                    |-- IntegerLiteral
+//     |----- Expression -- |-- PrefixExpression
+//                          |-- InfixExpression
+//                          |-- IfExpression
+//                          |-- FunctionLiteral
+//                          |-- CallExpression
+//
 use std::any::Any;
 use std::fmt::{Display, Formatter};
+use std::rc::Rc;
 use crate::lexer::token::Token;
 
 pub trait Node: Display + Any {
@@ -64,6 +81,7 @@ impl Node for LetStatement {
 
 impl Statement for LetStatement {}
 
+#[derive(Clone)]
 pub struct Identifier {
     pub token: Token,
 }
@@ -120,7 +138,6 @@ impl Node for ExpressionStatement {
         format!("{:?}", self.token)
     }
 }
-
 pub struct IntegerLiteral {
     pub token: Token,
     pub value: i64,
@@ -252,7 +269,7 @@ impl Statement for BlockStatement {}
 pub struct FunctionLiteral {
     pub token: Token,
     pub parameters: Vec<Identifier>,
-    pub body: BlockStatement,
+    pub body: Rc<BlockStatement>,
 }
 
 impl Node for FunctionLiteral {
