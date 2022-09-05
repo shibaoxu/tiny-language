@@ -1,34 +1,140 @@
-use std::any::Any;
-use std::fmt::{Debug, Display, Formatter};
-use std::rc::Rc;
-use crate::ast::{BlockStatement, FunctionLiteral, Identifier};
-use crate::evaluator::environment::Environment;
+use crate::ast::{BlockStatement, Identifier};
+use crate::evaluator::object::EvalResult::{BoolObj, ErrorObj, FunObj, IntObj, NullObj};
 
-use crate::evaluator::object::ObjectType::{Boolean, Error, Integer, Null};
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum ObjectType {
-    Integer,
-    Boolean,
-    Null,
-    Error,
-    Function,
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum EvalResult {
+    IntObj(IntegerObject),
+    BoolObj(BooleanObject),
+    NullObj(NullObject),
+    ErrorObj(ErrorObject),
+    FunObj(FunctionObject),
 }
 
-impl Display for ObjectType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            Integer => "INTEGER",
-            Boolean => "BOOLEAN",
-            Null => "NULL",
-            Error => "ERROR",
-            ObjectType::Function => "FUNCTION"
-        })
+impl EvalValue for EvalResult {
+    fn inspect(&self) -> String {
+        match self {
+            IntObj(v) => v.inspect(),
+            BoolObj(v) => v.inspect(),
+            NullObj(v) => v.inspect(),
+            ErrorObj(v) => v.inspect(),
+            FunObj(v) => v.inspect(),
+        }
+    }
+
+    fn is_return(&self) -> bool {
+        match self {
+            IntObj(v) => v.is_return(),
+            BoolObj(v) => v.is_return(),
+            NullObj(v) => v.is_return(),
+            ErrorObj(v) => v.is_return(),
+            FunObj(v) => v.is_return(),
+        }
+    }
+
+    fn set_return(&mut self) {
+        match self {
+            IntObj(v) => v.set_return(),
+            BoolObj(v) => v.set_return(),
+            NullObj(v) => v.set_return(),
+            ErrorObj(v) => v.set_return(),
+            FunObj(v) => v.set_return(),
+        }
     }
 }
 
-pub trait Object: Any {
-    fn object_type(&self) -> ObjectType;
+impl EvalResult {
+    pub fn new_int_object(value: i64) -> EvalResult {
+        IntObj(IntegerObject { value, is_return: false })
+    }
+    pub fn new_int_object_with_return(value: i64) -> EvalResult {
+        IntObj(IntegerObject { value, is_return: true })
+    }
+
+    pub fn new_bool_object(value: bool) -> EvalResult {
+        BoolObj(BooleanObject { value, is_return: false })
+    }
+
+    pub fn new_bool_object_with_return(value: bool) -> EvalResult {
+        BoolObj(BooleanObject { value, is_return: true })
+    }
+
+    pub fn new_null_object() -> EvalResult {
+        NullObj(NullObject(false))
+    }
+
+    pub fn new_error_object(message: &str) -> EvalResult {
+        ErrorObj(ErrorObject { message: message.into() })
+    }
+
+    pub fn new_function_object(parameters: Vec<Identifier>, body: BlockStatement) -> EvalResult {
+        FunObj(FunctionObject {
+            parameters,
+            body,
+            is_return: false,
+        })
+    }
+
+    pub fn is_error(&self) -> bool {
+        if let ErrorObj(_) = self {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn is_truthy(&self) -> bool {
+        match self {
+            IntObj(_) => true,
+            BoolObj(v) => v.value,
+            NullObj(_) => false,
+            ErrorObj(_) => true,
+            FunObj(_) => true,
+        }
+    }
+
+    pub fn convert_to_int(&self) -> Result<i64, String> {
+        if let IntObj(v) = self {
+            Ok(v.value)
+        } else {
+            Err(format!("can not convert {} to i64", &self.inspect()))
+        }
+    }
+
+    pub fn convert_to_bool(&self) -> Result<bool, String> {
+        if let BoolObj(v) = self {
+            Ok(v.value)
+        } else {
+            Err(format!("can not convert {} to i64", &self.inspect()))
+        }
+    }
+
+    pub fn convert_to_func(self) -> Result<FunctionObject, String> {
+        if let FunObj(v) = self {
+            Ok(v)
+        } else {
+            Err(format!("{} is not a valid function", self.inspect()))
+        }
+    }
+
+    pub fn convert_to_err(&self) -> Result<ErrorObject, String> {
+        if let ErrorObj(v) = self {
+            Ok(v.clone())
+        } else {
+            Err(format!("{} is not a ErrorObject", self.inspect()))
+        }
+    }
+    pub fn get_type(&self) -> &'static str {
+        match self {
+            IntObj(_) => "INTEGER",
+            BoolObj(_) => "BOOLEAN",
+            NullObj(_) => "NULL",
+            ErrorObj(_) => "ERROR",
+            FunObj(_) => "FUNCTION",
+        }
+    }
+}
+
+pub trait EvalValue {
     fn inspect(&self) -> String;
     fn is_return(&self) -> bool;
     fn set_return(&mut self);
@@ -40,11 +146,7 @@ pub struct IntegerObject {
     is_return: bool,
 }
 
-impl Object for IntegerObject {
-    fn object_type(&self) -> ObjectType {
-        ObjectType::Integer
-    }
-
+impl EvalValue for IntegerObject {
     fn inspect(&self) -> String {
         format!("{}", self.value)
     }
@@ -58,14 +160,6 @@ impl Object for IntegerObject {
     }
 }
 
-impl IntegerObject {
-    pub fn from(value: i64) -> Self {
-        Self {
-            value,
-            is_return: false,
-        }
-    }
-}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BooleanObject {
@@ -73,11 +167,7 @@ pub struct BooleanObject {
     pub is_return: bool,
 }
 
-impl Object for BooleanObject {
-    fn object_type(&self) -> ObjectType {
-        Boolean
-    }
-
+impl EvalValue for BooleanObject {
     fn inspect(&self) -> String {
         format!("{}", self.value)
     }
@@ -91,20 +181,10 @@ impl Object for BooleanObject {
     }
 }
 
-impl BooleanObject {
-    pub fn from(value: bool) -> Self {
-        Self { value, is_return: false }
-    }
-}
-
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct NullObject(pub bool);
 
-impl Object for NullObject {
-    fn object_type(&self) -> ObjectType {
-        Null
-    }
-
+impl EvalValue for NullObject {
     fn inspect(&self) -> String {
         "null".to_string()
     }
@@ -118,16 +198,13 @@ impl Object for NullObject {
     }
 }
 
+
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct ErrorObject {
     pub message: String,
 }
 
-impl Object for ErrorObject {
-    fn object_type(&self) -> ObjectType {
-        ObjectType::Error
-    }
-
+impl EvalValue for ErrorObject {
     fn inspect(&self) -> String {
         format!("{}", self.message)
     }
@@ -139,26 +216,14 @@ impl Object for ErrorObject {
     fn set_return(&mut self) {}
 }
 
-impl ErrorObject {
-    pub fn from(message: &str) -> Self {
-        Self {
-            message: message.to_string()
-        }
-    }
-}
-
-pub struct FunctionObject<'a> {
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct FunctionObject {
     pub parameters: Vec<Identifier>,
-    pub body: Rc<BlockStatement>,
-    pub env: Environment<'a>,
+    pub body: BlockStatement,
     pub is_return: bool,
 }
 
-impl Object for FunctionObject {
-    fn object_type(&self) -> ObjectType {
-        ObjectType::Function
-    }
-
+impl EvalValue for FunctionObject {
     fn inspect(&self) -> String {
         let mut value = String::new();
         value.push_str("fn");
@@ -178,38 +243,5 @@ impl Object for FunctionObject {
 
     fn set_return(&mut self) {
         self.is_return = true
-    }
-}
-
-// impl From<FunctionLiteral> for FunctionObject{
-//     fn from(literal: FunctionLiteral) -> Self {
-//         let params = literal.parameters.clone();
-//     }
-// }
-
-pub fn clone_box(input: &Box<dyn Object>) -> Box<dyn Object> {
-    let value_any = input.as_ref() as &dyn Any;
-    match input.object_type() {
-        Integer => {
-            let actual = value_any.downcast_ref::<IntegerObject>().unwrap();
-            Box::new(actual.clone())
-        }
-        Boolean => {
-            let actual = value_any.downcast_ref::<BooleanObject>().unwrap();
-            Box::new(actual.clone())
-        }
-        Null => {
-            let actual = value_any.downcast_ref::<NullObject>().unwrap();
-            Box::new(actual.clone())
-        }
-        Error => {
-            let actual = value_any.downcast_ref::<ErrorObject>().unwrap();
-            Box::new(actual.clone())
-        }
-        ObjectType::Function => {
-            panic!("can not clone function");
-            // let actual = value_any.downcast_ref::<FunctionObject>().unwrap();
-            // Box::new(actual.clone())
-        }
     }
 }

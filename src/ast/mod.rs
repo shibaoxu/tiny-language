@@ -14,25 +14,74 @@
 //                          |-- FunctionLiteral
 //                          |-- CallExpression
 //
-use std::any::Any;
+
 use std::fmt::{Display, Formatter};
-use std::rc::Rc;
+
 use crate::lexer::token::Token;
 
-pub trait Node: Display + Any {
-    fn token_literal(&self) -> String;
+pub trait Node: Display {
+    fn token_literal(&self) -> String {
+        self.to_string()
+    }
 }
 
-pub trait Statement: Node {
-    fn statement_node(&self) {}
+// pub trait Stmt: Node {
+//     fn statement_node(&self) {}
+// }
+//
+// pub trait Expr: Node {
+//     fn expression_node(&self) {}
+// }
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum Statement {
+    LetStmt(LetStatement),
+    ReturnStmt(ReturnStatement),
+    BlockStmt(BlockStatement),
+    ExpStmt(ExpressionStatement),
 }
 
-pub trait Expression: Node {
-    fn expression_node(&self) {}
+impl Display for Statement {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Statement::LetStmt(stmt) => f.write_str(&stmt.token_literal()),
+            Statement::ReturnStmt(stmt) => f.write_str(&stmt.token_literal()),
+            Statement::BlockStmt(stmt) => f.write_str(&stmt.token_literal()),
+            Statement::ExpStmt(stmt) => f.write_str(&stmt.token_literal()),
+        }
+    }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum Expression {
+    Identifier(Identifier),
+    BoolLiteral(BooleanLiteral),
+    IntLiteral(IntegerLiteral),
+    PrefixExpr(PrefixExpression),
+    InfixExpr(InfixExpression),
+    IfExpr(IfExpression),
+    FuncLiteral(FunctionLiteral),
+    CallExpr(CallExpression),
+}
+
+impl Display for Expression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Expression::Identifier(expr) => f.write_str(&expr.token_literal()),
+            Expression::BoolLiteral(expr) => f.write_str(&expr.token_literal()),
+            Expression::IntLiteral(expr) => f.write_str(&expr.token_literal()),
+            Expression::PrefixExpr(expr) => f.write_str(&expr.token_literal()),
+            Expression::InfixExpr(expr) => f.write_str(&expr.token_literal()),
+            Expression::IfExpr(expr) => f.write_str(&expr.token_literal()),
+            Expression::FuncLiteral(expr) => f.write_str(&expr.token_literal()),
+            Expression::CallExpr(expr) => f.write_str(&expr.token_literal()),
+        }
+    }
+}
+
+#[derive(Debug, Clone,Eq, PartialEq)]
 pub struct Program {
-    pub statements: Vec<Box<dyn Statement>>,
+    pub statements: Vec<Statement>,
 }
 
 impl Program {
@@ -52,205 +101,59 @@ impl Display for Program {
     }
 }
 
-impl Node for Program {
-    fn token_literal(&self) -> String {
-        if self.statements.len() > 0 {
-            return self.statements.get(0).unwrap().token_literal();
-        }
-        "".to_string()
-    }
-}
+//todo:
+impl Node for Program {}
 
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct LetStatement {
     pub token: Token,
     pub name: Identifier,
-    pub value: Box<dyn Expression>,
+    pub value: Expression,
 }
 
 impl Display for LetStatement {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {} = {};", self.token.literal, self.name.to_string(), self.value.as_ref().to_string())
+        write!(f, "{} {} = {};", self.token.literal, self.name.to_string(), self.value.to_string())
     }
 }
+impl Node for LetStatement {}
+// impl Stmt for LetStatement {}
 
-impl Node for LetStatement {
-    fn token_literal(&self) -> String {
-        self.token.literal.clone()
-    }
-}
-
-impl Statement for LetStatement {}
-
-#[derive(Clone)]
-pub struct Identifier {
-    pub token: Token,
-}
-
-impl Display for Identifier {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.token.literal)
-    }
-}
-
-impl Node for Identifier {
-    fn token_literal(&self) -> String {
-        format!("{:?}", self.token)
-    }
-}
-
-impl Expression for Identifier {}
-
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ReturnStatement {
     pub token: Token,
-    pub value: Box<dyn Expression>,
+    pub value: Expression,
 }
 
-impl Statement for ReturnStatement {}
+impl Node for ReturnStatement {}
+
+// impl Stmt for ReturnStatement {}
 
 impl Display for ReturnStatement {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {};", self.token.literal, self.value.as_ref().to_string())
+        write!(f, "{} {};", self.token.literal, self.value.to_string())
     }
 }
 
-impl Node for ReturnStatement {
-    fn token_literal(&self) -> String {
-        self.token.literal.clone()
-    }
-}
 
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ExpressionStatement {
     pub token: Token,
-    pub expression: Box<dyn Expression>,
+    pub expression: Expression,
 }
 
-impl Statement for ExpressionStatement {}
-
+impl Node for ExpressionStatement {}
+// impl Stmt for ExpressionStatement {}
 impl Display for ExpressionStatement {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.expression.to_string())
     }
 }
 
-impl Node for ExpressionStatement {
-    fn token_literal(&self) -> String {
-        // self.token.literal.clone()
-        format!("{:?}", self.token)
-    }
-}
-pub struct IntegerLiteral {
-    pub token: Token,
-    pub value: i64,
-}
-
-impl Display for IntegerLiteral {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.token.literal)
-    }
-}
-
-impl Node for IntegerLiteral {
-    fn token_literal(&self) -> String {
-        format!("{:?}", self.token)
-    }
-}
-
-impl Expression for IntegerLiteral {}
-
-pub struct PrefixExpression {
-    pub token: Token,
-    pub operator: String,
-    pub right: Box<dyn Expression>,
-}
-
-impl Display for PrefixExpression {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({}{})", self.operator, self.right)
-    }
-}
-
-impl Node for PrefixExpression {
-    fn token_literal(&self) -> String {
-        format!("{:?}", self.token)
-    }
-}
-
-impl Expression for PrefixExpression {}
-
-pub struct InfixExpression {
-    pub token: Token,
-    pub left: Box<dyn Expression>,
-    pub operator: String,
-    pub right: Box<dyn Expression>,
-}
-
-impl Node for InfixExpression {
-    fn token_literal(&self) -> String {
-        format!("{:?}", self.token)
-    }
-}
-
-impl Display for InfixExpression {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({} {} {})", self.left.to_string(), self.operator.to_string(), self.right.to_string())
-    }
-}
-
-impl Expression for InfixExpression {}
-
-pub struct BooleanLiteral {
-    pub token: Token,
-    pub value: bool,
-}
-
-impl Node for BooleanLiteral {
-    fn token_literal(&self) -> String {
-        format!("{:?}", self.token)
-    }
-}
-
-impl Display for BooleanLiteral {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.value)
-    }
-}
-
-impl Expression for BooleanLiteral {}
-
-pub struct IfExpression {
-    pub token: Token,
-    pub condition: Box<dyn Expression>,
-    pub consequence: BlockStatement,
-    pub alternative: Option<BlockStatement>,
-}
-
-impl Node for IfExpression {
-    fn token_literal(&self) -> String {
-        format!("{}", self.token.literal)
-    }
-}
-
-impl Display for IfExpression {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "if {} {}", self.condition.to_string(), self.consequence.to_string())?;
-        if self.alternative.is_some() {
-            write!(f, " else {}", self.alternative.as_ref().unwrap().to_string())?;
-        }
-        Ok(())
-    }
-}
-
-impl Expression for IfExpression {}
-
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BlockStatement {
     pub token: Token,
-    pub statements: Vec<Box<dyn Statement>>,
-}
-
-impl Node for BlockStatement {
-    fn token_literal(&self) -> String {
-        format!("{}", self.token.literal)
-    }
+    pub statements: Vec<Statement>,
 }
 
 impl Display for BlockStatement {
@@ -264,18 +167,118 @@ impl Display for BlockStatement {
     }
 }
 
-impl Statement for BlockStatement {}
+impl Node for BlockStatement {}
+// impl Stmt for BlockStatement {}
 
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct Identifier {
+    pub token: Token,
+}
+
+impl Display for Identifier {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.token.literal)
+    }
+}
+impl Node for Identifier {}
+// impl Expr for Identifier {}
+
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct IntegerLiteral {
+    pub token: Token,
+    pub value: i64,
+}
+
+impl Display for IntegerLiteral {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.token.literal)
+    }
+}
+
+impl Node for IntegerLiteral {}
+
+// impl Expr for IntegerLiteral {}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct PrefixExpression {
+    pub token: Token,
+    pub operator: String,
+    pub right: Box<Expression>,
+}
+
+impl Display for PrefixExpression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}{})", self.operator, self.right)
+    }
+}
+
+
+impl Node for PrefixExpression {}
+
+// impl Expr for PrefixExpression {}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct InfixExpression {
+    pub token: Token,
+    pub left: Box<Expression>,
+    pub operator: String,
+    pub right: Box<Expression>,
+}
+
+impl Display for InfixExpression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({} {} {})", self.left.to_string(), self.operator.to_string(), self.right.to_string())
+    }
+}
+
+impl Node for InfixExpression {}
+
+// impl Expr for InfixExpression {}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BooleanLiteral {
+    pub token: Token,
+    pub value: bool,
+}
+
+impl Display for BooleanLiteral {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value)
+    }
+}
+
+impl Node for BooleanLiteral {}
+
+// impl Expr for BooleanLiteral {}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct IfExpression {
+    pub token: Token,
+    pub condition: Box<Expression>,
+    pub consequence: BlockStatement,
+    pub alternative: Option<Box<BlockStatement>>,
+}
+impl Display for IfExpression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "if {} {}", self.condition.to_string(), self.consequence.to_string())?;
+        if self.alternative.is_some() {
+            write!(f, " else {}", self.alternative.as_ref().unwrap().to_string())?;
+        }
+        Ok(())
+    }
+}
+
+impl Node for IfExpression {}
+
+// impl Expr for IfExpression {}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct FunctionLiteral {
     pub token: Token,
     pub parameters: Vec<Identifier>,
-    pub body: Rc<BlockStatement>,
-}
-
-impl Node for FunctionLiteral {
-    fn token_literal(&self) -> String {
-        self.token.literal.clone()
-    }
+    pub body: BlockStatement,
 }
 
 impl Display for FunctionLiteral {
@@ -285,20 +288,16 @@ impl Display for FunctionLiteral {
     }
 }
 
-impl Expression for FunctionLiteral {}
+impl Node for FunctionLiteral {}
 
+// impl Expr for FunctionLiteral {}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct CallExpression {
     pub token: Token,
-    pub function: Box<dyn Expression>,
-    pub arguments: Vec<Box<dyn Expression>>,
+    pub function: Box<Expression>,
+    pub arguments: Vec<Box<Expression>>,
 }
-
-impl Node for CallExpression {
-    fn token_literal(&self) -> String {
-        self.token.literal.clone()
-    }
-}
-
 impl Display for CallExpression {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let arguments = self.arguments.iter().map(|e| e.to_string()).collect::<Vec<_>>().join(",");
@@ -306,29 +305,6 @@ impl Display for CallExpression {
     }
 }
 
-impl Expression for CallExpression {}
+impl Node for CallExpression {}
 
-#[cfg(test)]
-mod tests {
-    use crate::ast::{Identifier, LetStatement, Program, ReturnStatement};
-    use crate::lexer::token::Token;
-
-    #[test]
-    fn test_to_string_work() {
-        let program = Program {
-            statements: vec![
-                Box::new(LetStatement {
-                    token: Token::new_let(),
-                    name: Identifier { token: Token::new_identity("my_var") },
-                    value: Box::new(Identifier { token: Token::new_identity("another_var") }),
-                }),
-                Box::new(ReturnStatement {
-                    token: Token::new_return(),
-                    value: Box::new(Identifier { token: Token::new_identity("result") }),
-                }),
-            ]
-        };
-        assert_eq!(program.to_string(),
-                   "let my_var = another_var;return result;");
-    }
-}
+// impl Expr for CallExpression {}
