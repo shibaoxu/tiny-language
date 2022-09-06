@@ -1,6 +1,6 @@
 use std::io;
 use std::io::BufReader;
-use monkey::repl;
+use tiny_language::repl;
 
 fn main() {
     println!("Hello! This is the Monkey program language!");
