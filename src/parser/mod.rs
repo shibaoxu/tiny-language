@@ -4,7 +4,7 @@ use std::str::FromStr;
 use crate::{Lexer, TokenType};
 
 use thiserror::Error;
-use crate::ast::{BlockStatement, BooleanLiteral, CallExpression, Expression, ExpressionStatement, FunctionLiteral, Identifier, IfExpression, InfixExpression, IntegerLiteral, LetStatement, PrefixExpression, Program, ReturnStatement, Statement};
+use crate::ast::{BlockStatement, BooleanLiteral, CallExpression, Expression, ExpressionStatement, FunctionLiteral, Identifier, IfExpression, InfixExpression, IntegerLiteral, LetStatement, PrefixExpression, Program, ReturnStatement, Statement, StringLiteral};
 use crate::ast::Expression::BoolLiteral;
 use crate::lexer::token::Token;
 use crate::parser::ParsingError::{ExpectRightExpress, ExpectValidExpression, NoPrefixParseFun};
@@ -85,6 +85,7 @@ impl<T: BufRead + Seek> Parser<T> {
     fn init(&mut self) {
         self.register_prefix(TokenType::Identity, Self::parse_identifier);
         self.register_prefix(TokenType::Int, Self::parse_integer_literal);
+        self.register_prefix(TokenType::String, Self::parse_string_literal);
         self.register_prefix(TokenType::Bang, Self::parse_prefix_expression);
         self.register_prefix(TokenType::Minus, Self::parse_prefix_expression);
         self.register_prefix(TokenType::True, Self::parse_boolean_literal);
@@ -222,6 +223,14 @@ impl<T: BufRead + Seek> Parser<T> {
         Some(
             Expression::IntLiteral(
                 IntegerLiteral { token: self.cur_token.clone(), value: i64::from_str(&self.cur_token.literal).unwrap() }
+            )
+        )
+    }
+
+    fn parse_string_literal(&mut self) -> Option<Expression>{
+        Some(
+            Expression::StrLiteral(
+                StringLiteral{ token: self.cur_token.clone(), value: self.cur_token.literal.clone() }
             )
         )
     }
@@ -499,7 +508,7 @@ mod tests {
 
 
     #[test]
-    fn test_parsing_return_statement_work() {
+    fn test_parsing_return_statement() {
         let cases = vec![
             ("return 5;", "return 5;"),
             ("return true;", "return true;"),
@@ -509,13 +518,13 @@ mod tests {
     }
 
     #[test]
-    fn test_parsing_identifier_expression_work() {
+    fn test_parsing_identifier() {
         let cases = vec![("foobar", "foobar")];
         run_cases(&cases);
     }
 
     #[test]
-    fn test_parsing_integer_literal_expression_work() {
+    fn test_parsing_integer_literal() {
         let cases = vec![
             ("5;", "5")
         ];
@@ -523,7 +532,16 @@ mod tests {
     }
 
     #[test]
-    fn test_parsing_prefix_expressions_work() {
+    fn test_parsing_string_literal(){
+        let cases = vec![
+            ("\"foo\"", "foo"),
+            ("\"foo 'bar\"", "foo 'bar"),
+        ];
+        run_cases(&cases);
+    }
+
+    #[test]
+    fn test_parsing_prefix_expressions() {
         let cases = vec![
             ("!15;", "!", "(!15)"),
             ("-15;", "-", "(-15)"),

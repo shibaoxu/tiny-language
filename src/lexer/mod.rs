@@ -14,6 +14,7 @@ enum State {
     NotEqual,
     Equal,
     Int,
+    String,
     Word,
 }
 
@@ -51,6 +52,7 @@ impl<T: BufRead + Seek> Lexer<T> {
                                 '<' => state = State::LessEqual,
                                 '=' => state = State::Equal,
                                 '!' => state = State::NotEqual,
+                                '"' => state = State::String,
                                 _ => {
                                     state = State::Done;
                                     token = match c {
@@ -106,23 +108,32 @@ impl<T: BufRead + Seek> Lexer<T> {
                             }
                         }
                         State::Word => {
-                            if Self::is_letter(c){
+                            if Self::is_letter(c) {
                                 buf.push_str(&c.to_string());
                                 continue;
-                            }else{
+                            } else {
                                 state = State::Done;
                                 token = Token::new(TokenType::lookup_ident(&buf), &buf);
                                 self.back();
                             }
                         }
                         State::Int => {
-                            if c.is_ascii_digit(){
+                            if c.is_ascii_digit() {
                                 buf.push_str(&c.to_string());
                                 continue;
-                            }else{
+                            } else {
                                 state = State::Done;
                                 token = Token::new(TokenType::Int, &buf);
                                 self.back();
+                            }
+                        }
+                        State::String => {
+                            if c == '"' {
+                                state = State::Done;
+                                token = Token::new_string(&buf);
+                            } else {
+                                buf.push_str(&String::from(c));
+                                continue;
                             }
                         }
                         State::Done => {
@@ -137,15 +148,15 @@ impl<T: BufRead + Seek> Lexer<T> {
                         State::GreatEqual => Token::new(TokenType::GT, ">"),
                         State::LessEqual => Token::new(TokenType::LT, "<"),
                         State::NotEqual => Token::new(TokenType::Illegal, "!"),
-                        State::Equal => Token::new(TokenType::Assign,"="),
+                        State::Equal => Token::new(TokenType::Assign, "="),
                         State::Int => Token::new(TokenType::Int, &buf),
+                        State::String => Token::new_illegal(&buf),
                         State::Word => Token::new(TokenType::lookup_ident(&buf), &buf),
                     };
                     state = State::Done;
                 }
             }
         }
-
         token
     }
 
@@ -205,34 +216,29 @@ mod tests {
             return false;\
         }\
         10 == 10;\
-        10 != 9;";
+        10 != 9;\
+        \"foobar\"\
+        \"foo bar\"";
 
+        println!("{}", input);
         let outputs = vec![
-            Token::new_let(), Token::new_identity("five"), Token::new_assign(), Token::new_int( "5"), Token::new_semicolon(),
+            Token::new_let(), Token::new_identity("five"), Token::new_assign(), Token::new_int("5"), Token::new_semicolon(),
             Token::new_let(), Token::new_identity("ten"), Token::new_assign(), Token::new_int("10"), Token::new_semicolon(),
-            Token::new_let(), Token::new_identity("add"), Token::new_assign(), Token::new_fun(), Token::new_lparen(), Token::new_identity("x"), Token::new_comma(), Token::new_identity( "y"), Token::new_rparen(), Token::new_lbrace(),
+            Token::new_let(), Token::new_identity("add"), Token::new_assign(), Token::new_fun(), Token::new_lparen(), Token::new_identity("x"), Token::new_comma(), Token::new_identity("y"), Token::new_rparen(), Token::new_lbrace(),
             Token::new_identity("x"), Token::new_plus(), Token::new_identity("y"), Token::new_semicolon(),
             Token::new_rbrace(), Token::new_semicolon(),
             Token::new_let(), Token::new_identity("result"), Token::new_assign(), Token::new_identity("add"), Token::new_lparen(), Token::new_identity("five"), Token::new_comma(), Token::new_identity("ten"), Token::new_rparen(), Token::new_semicolon(),
-            // TokenType::Bang, TokenType::Minus, TokenType::Slash, TokenType::Asterisk, TokenType::Int(5), TokenType::Semicolon,
-            Token::new_bang(), Token::new_minus(),Token::new_slash(),Token::new_asterisk(),Token::new_int("5"),Token::new_semicolon(),
-            // TokenType::Int(5), TokenType::LT, TokenType::Int(10), TokenType::GT, TokenType::Int(5), TokenType::Semicolon,
+            Token::new_bang(), Token::new_minus(), Token::new_slash(), Token::new_asterisk(), Token::new_int("5"), Token::new_semicolon(),
             Token::new_int("5"), Token::new_lt(), Token::new_int("10"), Token::new_gt(), Token::new_int("5"), Token::new_semicolon(),
-            // TokenType::If, TokenType::LParen, TokenType::Int(5), TokenType::LT, TokenType::Int(10), TokenType::RParen, TokenType::LBrace,
             Token::new_if(), Token::new_lparen(), Token::new_int("5"), Token::new_lt(), Token::new_int("10"), Token::new_rparen(), Token::new_lbrace(),
-            // TokenType::Return, TokenType::True, TokenType::Semicolon,
             Token::new_return(), Token::new_true(), Token::new_semicolon(),
-            // TokenType::RBrace, TokenType::Else, TokenType::LBrace,
             Token::new_rbrace(), Token::new_else(), Token::new_lbrace(),
-            // TokenType::Return, TokenType::False, TokenType::Semicolon,
-            Token::new_return(), Token::new_false(),Token::new_semicolon(),
-            // TokenType::RBrace,
+            Token::new_return(), Token::new_false(), Token::new_semicolon(),
             Token::new_rbrace(),
-            // TokenType::Int(10), TokenType::EQ, TokenType::Int(10), TokenType::Semicolon,
             Token::new_int("10"), Token::new_eq(), Token::new_int("10"), Token::new_semicolon(),
-            // TokenType::Int(10), TokenType::NotEq, TokenType::Int(9), TokenType::Semicolon,
             Token::new_int("10"), Token::new_not_eq(), Token::new_int("9"), Token::new_semicolon(),
-            // TokenType::EOF,
+            Token::new_string("foobar"),
+            Token::new_string("foo bar"),
             Token::new_eof(),
         ];
 

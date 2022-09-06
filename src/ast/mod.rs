@@ -57,6 +57,7 @@ pub enum Expression {
     Identifier(Identifier),
     BoolLiteral(BooleanLiteral),
     IntLiteral(IntegerLiteral),
+    StrLiteral(StringLiteral),
     PrefixExpr(PrefixExpression),
     InfixExpr(InfixExpression),
     IfExpr(IfExpression),
@@ -70,6 +71,7 @@ impl Display for Expression {
             Expression::Identifier(expr) => f.write_str(&expr.token_literal()),
             Expression::BoolLiteral(expr) => f.write_str(&expr.token_literal()),
             Expression::IntLiteral(expr) => f.write_str(&expr.token_literal()),
+            Expression::StrLiteral(expr) => f.write_str(&expr.token_literal()),
             Expression::PrefixExpr(expr) => f.write_str(&expr.token_literal()),
             Expression::InfixExpr(expr) => f.write_str(&expr.token_literal()),
             Expression::IfExpr(expr) => f.write_str(&expr.token_literal()),
@@ -79,7 +81,7 @@ impl Display for Expression {
     }
 }
 
-#[derive(Debug, Clone,Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Program {
     pub statements: Vec<Statement>,
 }
@@ -101,7 +103,6 @@ impl Display for Program {
     }
 }
 
-//todo:
 impl Node for Program {}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -116,8 +117,8 @@ impl Display for LetStatement {
         write!(f, "{} {} = {};", self.token.literal, self.name.to_string(), self.value.to_string())
     }
 }
+
 impl Node for LetStatement {}
-// impl Stmt for LetStatement {}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ReturnStatement {
@@ -126,8 +127,6 @@ pub struct ReturnStatement {
 }
 
 impl Node for ReturnStatement {}
-
-// impl Stmt for ReturnStatement {}
 
 impl Display for ReturnStatement {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -143,7 +142,7 @@ pub struct ExpressionStatement {
 }
 
 impl Node for ExpressionStatement {}
-// impl Stmt for ExpressionStatement {}
+
 impl Display for ExpressionStatement {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.expression.to_string())
@@ -168,8 +167,6 @@ impl Display for BlockStatement {
 }
 
 impl Node for BlockStatement {}
-// impl Stmt for BlockStatement {}
-
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Identifier {
@@ -181,9 +178,8 @@ impl Display for Identifier {
         write!(f, "{}", self.token.literal)
     }
 }
-impl Node for Identifier {}
-// impl Expr for Identifier {}
 
+impl Node for Identifier {}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct IntegerLiteral {
@@ -199,7 +195,19 @@ impl Display for IntegerLiteral {
 
 impl Node for IntegerLiteral {}
 
-// impl Expr for IntegerLiteral {}
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct StringLiteral {
+    pub token: Token,
+    pub value: String,
+}
+
+impl Display for StringLiteral {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.token.literal)
+    }
+}
+
+impl Node for StringLiteral {}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct PrefixExpression {
@@ -217,8 +225,6 @@ impl Display for PrefixExpression {
 
 impl Node for PrefixExpression {}
 
-// impl Expr for PrefixExpression {}
-
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct InfixExpression {
     pub token: Token,
@@ -234,8 +240,6 @@ impl Display for InfixExpression {
 }
 
 impl Node for InfixExpression {}
-
-// impl Expr for InfixExpression {}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BooleanLiteral {
@@ -260,6 +264,7 @@ pub struct IfExpression {
     pub consequence: BlockStatement,
     pub alternative: Option<Box<BlockStatement>>,
 }
+
 impl Display for IfExpression {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "if {} {}", self.condition.to_string(), self.consequence.to_string())?;
@@ -271,8 +276,6 @@ impl Display for IfExpression {
 }
 
 impl Node for IfExpression {}
-
-// impl Expr for IfExpression {}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct FunctionLiteral {
@@ -290,14 +293,13 @@ impl Display for FunctionLiteral {
 
 impl Node for FunctionLiteral {}
 
-// impl Expr for FunctionLiteral {}
-
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct CallExpression {
     pub token: Token,
     pub function: Box<Expression>,
     pub arguments: Vec<Box<Expression>>,
 }
+
 impl Display for CallExpression {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let arguments = self.arguments.iter().map(|e| e.to_string()).collect::<Vec<_>>().join(",");
@@ -306,5 +308,3 @@ impl Display for CallExpression {
 }
 
 impl Node for CallExpression {}
-
-// impl Expr for CallExpression {}

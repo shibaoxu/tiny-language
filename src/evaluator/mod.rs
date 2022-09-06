@@ -61,6 +61,7 @@ fn eval_expression(expr: &Expression, env: &Environment) -> EvalResult {
         Expression::Identifier(expr) => eval_identifier(expr, env),
         Expression::BoolLiteral(expr) => EvalResult::new_bool_object(expr.value),
         Expression::IntLiteral(expr) => EvalResult::new_int_object(expr.value),
+        Expression::StrLiteral(expr) => EvalResult::new_string_object(&expr.value),
         Expression::PrefixExpr(expr) => eval_prefix_expression(expr, env),
         Expression::InfixExpr(expr) => eval_infix_expression(expr, env),
         Expression::IfExpr(expr) => eval_if_expression(expr, env),
@@ -142,6 +143,16 @@ fn eval_infix_expression(expr: &InfixExpression, env: &Environment) -> EvalResul
                 TokenType::EQ => EvalResult::new_bool_object(lval == rval),
                 TokenType::NotEq => EvalResult::new_bool_object(lval != rval),
                 _ => EvalResult::new_error_object(&format!("unknown operator: {} {} {}", left.get_type(), operator, right.get_type())),
+            }
+        }
+        EvalResult::StrObj(_) =>{
+            let lval = left.convert_to_string().unwrap();
+            let rval = right.convert_to_string().unwrap();
+            match operator {
+                TokenType::Plus => {
+                    EvalResult::new_string_object(&format!("{}{}", lval, rval))
+                }
+                _ => EvalResult::new_error_object(&format!("unknown operator: {} {} {}", left.get_type(), operator, right.get_type()))
             }
         }
         EvalResult::ErrorObj(_) => panic!("impossible executed position"),
@@ -238,6 +249,17 @@ mod tests {
             ("3 * 3 * 3 + 10", EvalResult::new_int_object(37)),
             ("3 * (3 * 3) + 10", EvalResult::new_int_object(37)),
             ("(5 + 10 * 2 + 15 / 3) * 2 + -10", EvalResult::new_int_object(50)),
+        ];
+        run_cases(&cases);
+    }
+
+    #[test]
+    fn test_eval_string_expression(){
+        let cases = vec![
+            ("\"foo\"", EvalResult::new_string_object("foo")),
+            ("\"foo bar\"", EvalResult::new_string_object("foo bar")),
+            ("\"\"", EvalResult::new_string_object("")),
+            ("\"foo\" + \"bar\"", EvalResult::new_string_object("foobar")),
         ];
         run_cases(&cases);
     }

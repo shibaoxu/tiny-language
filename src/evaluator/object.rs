@@ -1,10 +1,12 @@
 use crate::ast::{BlockStatement, Identifier};
-use crate::evaluator::object::EvalResult::{BoolObj, ErrorObj, FunObj, IntObj, NullObj};
+
+use crate::evaluator::object::EvalResult::{BoolObj, ErrorObj, FunObj, IntObj, NullObj, StrObj};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum EvalResult {
     IntObj(IntegerObject),
     BoolObj(BooleanObject),
+    StrObj(StringObject),
     NullObj(NullObject),
     ErrorObj(ErrorObject),
     FunObj(FunctionObject),
@@ -15,6 +17,7 @@ impl EvalValue for EvalResult {
         match self {
             IntObj(v) => v.inspect(),
             BoolObj(v) => v.inspect(),
+            StrObj(v) => v.inspect(),
             NullObj(v) => v.inspect(),
             ErrorObj(v) => v.inspect(),
             FunObj(v) => v.inspect(),
@@ -25,6 +28,7 @@ impl EvalValue for EvalResult {
         match self {
             IntObj(v) => v.is_return(),
             BoolObj(v) => v.is_return(),
+            StrObj(v) => v.is_return(),
             NullObj(v) => v.is_return(),
             ErrorObj(v) => v.is_return(),
             FunObj(v) => v.is_return(),
@@ -35,6 +39,7 @@ impl EvalValue for EvalResult {
         match self {
             IntObj(v) => v.set_return(),
             BoolObj(v) => v.set_return(),
+            StrObj(v) => v.set_return(),
             NullObj(v) => v.set_return(),
             ErrorObj(v) => v.set_return(),
             FunObj(v) => v.set_return(),
@@ -45,6 +50,9 @@ impl EvalValue for EvalResult {
 impl EvalResult {
     pub fn new_int_object(value: i64) -> EvalResult {
         IntObj(IntegerObject { value, is_return: false })
+    }
+    pub fn new_string_object(value: &str) -> EvalResult {
+        StrObj(StringObject { value: value.to_string(), is_return: false })
     }
     pub fn new_int_object_with_return(value: i64) -> EvalResult {
         IntObj(IntegerObject { value, is_return: true })
@@ -86,6 +94,7 @@ impl EvalResult {
         match self {
             IntObj(_) => true,
             BoolObj(v) => v.value,
+            StrObj(_) => true,
             NullObj(_) => false,
             ErrorObj(_) => true,
             FunObj(_) => true,
@@ -108,6 +117,14 @@ impl EvalResult {
         }
     }
 
+    pub fn convert_to_string(&self) -> Result<String, String> {
+        if let StrObj(v) = self {
+            Ok(v.value.clone())
+        } else {
+            Err(format!("can not convert {} to string", &self.inspect()))
+        }
+    }
+
     pub fn convert_to_func(self) -> Result<FunctionObject, String> {
         if let FunObj(v) = self {
             Ok(v)
@@ -127,6 +144,7 @@ impl EvalResult {
         match self {
             IntObj(_) => "INTEGER",
             BoolObj(_) => "BOOLEAN",
+            StrObj(_) => "STRING",
             NullObj(_) => "NULL",
             ErrorObj(_) => "ERROR",
             FunObj(_) => "FUNCTION",
@@ -160,6 +178,25 @@ impl EvalValue for IntegerObject {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct StringObject {
+    pub value: String,
+    is_return: bool,
+}
+
+impl EvalValue for StringObject {
+    fn inspect(&self) -> String {
+        self.value.clone()
+    }
+
+    fn is_return(&self) -> bool {
+        self.is_return
+    }
+
+    fn set_return(&mut self) {
+        self.is_return = true
+    }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BooleanObject {

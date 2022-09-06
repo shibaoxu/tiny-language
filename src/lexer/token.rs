@@ -8,6 +8,7 @@ pub enum TokenType {
 
     Identity,
     Int,
+    String,
 
     Assign,
     Plus,
@@ -81,6 +82,7 @@ impl Token {
     pub fn new_int(literal: &str) -> Self {
         Self::new(TokenType::Int, literal)
     }
+    pub fn new_string(literal: &str) -> Self { Self::new(TokenType::String, literal) }
     pub fn new_assign() -> Self {
         Self::new(TokenType::Assign, "=")
     }
@@ -186,6 +188,7 @@ impl Display for TokenType {
             TokenType::EOF => "eof",
             TokenType::Identity => "identity",
             TokenType::Int => "INTEGER",
+            TokenType::String => "String",
             TokenType::Assign => "=",
             TokenType::Plus => "+",
             TokenType::Minus => "-",
