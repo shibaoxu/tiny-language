@@ -4,10 +4,11 @@ use std::str::FromStr;
 use crate::{Lexer, TokenType};
 
 use thiserror::Error;
-use crate::ast::{BlockStatement, BooleanLiteral, CallExpression, Expression, ExpressionStatement, FunctionLiteral, Identifier, IfExpression, InfixExpression, IntegerLiteral, LetStatement, PrefixExpression, Program, ReturnStatement, Statement, StringLiteral};
+use crate::ast::{ArrayLiteral, BlockStatement, BooleanLiteral, CallExpression, Expression, ExpressionStatement, FunctionLiteral, Identifier, IfExpression, InfixExpression, IntegerLiteral, LetStatement, PrefixExpression, Program, ReturnStatement, Statement, StringLiteral};
 use crate::ast::Expression::BoolLiteral;
 use crate::lexer::token::Token;
 use crate::parser::ParsingError::{ExpectRightExpress, ExpectValidExpression, NoPrefixParseFun};
+use crate::TokenType::LBracket;
 
 #[derive(Error, Debug, Clone)]
 pub enum ParsingError {
@@ -91,6 +92,7 @@ impl<T: BufRead + Seek> Parser<T> {
         self.register_prefix(TokenType::True, Self::parse_boolean_literal);
         self.register_prefix(TokenType::False, Self::parse_boolean_literal);
         self.register_prefix(TokenType::LParen, Self::parse_grouped_expression);
+        self.register_prefix(TokenType::LBracket, Self::parse_array_literal);
         self.register_prefix(TokenType::If, Self::parse_if_expression);
         self.register_prefix(TokenType::Function, Self::parse_function_literal);
 
@@ -227,10 +229,10 @@ impl<T: BufRead + Seek> Parser<T> {
         )
     }
 
-    fn parse_string_literal(&mut self) -> Option<Expression>{
+    fn parse_string_literal(&mut self) -> Option<Expression> {
         Some(
             Expression::StrLiteral(
-                StringLiteral{ token: self.cur_token.clone(), value: self.cur_token.literal.clone() }
+                StringLiteral { token: self.cur_token.clone(), value: self.cur_token.literal.clone() }
             )
         )
     }
@@ -438,6 +440,39 @@ impl<T: BufRead + Seek> Parser<T> {
         }))
     }
 
+    fn parse_array_literal(&mut self) -> Option<Expression> {
+        let cur_token = self.cur_token.clone();
+        let mut elements = vec![];
+
+        if self.peek_token_is(LBracket){
+            return Some(Expression::ArrLiteral(ArrayLiteral{ token: cur_token.clone(), elements }))
+        }
+
+        self.next_token();
+        match self.parse_expression(Precedence::Lowest){
+            Some(expr) => elements.push(Box::new(expr.clone())),
+            None => {
+                self.errors.push(ExpectValidExpression);
+                return None;
+            }
+        }
+        while self.peek_token_is(TokenType::Comma){
+            self.next_token();
+            self.next_token();
+            match self.parse_expression(Precedence::Lowest){
+                Some(expr) => elements.push(Box::new(expr.clone())),
+                None => {
+                    self.errors.push(ExpectValidExpression);
+                    return None;
+                }
+            }
+        }
+
+        if !self.expected_peek(TokenType::RBracket) {
+            return None;
+        }
+        Some(Expression::ArrLiteral(ArrayLiteral { token: cur_token, elements }))
+    }
 
     fn expected_peek(&mut self, expected_token: TokenType) -> bool {
         if self.peek_token.token_type == expected_token {
@@ -532,7 +567,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parsing_string_literal(){
+    fn test_parsing_string_literal() {
         let cases = vec![
             ("\"foo\"", "foo"),
             ("\"foo 'bar\"", "foo 'bar"),
@@ -661,6 +696,14 @@ mod tests {
         run_cases(&cases);
     }
 
+    #[test]
+    fn test_array_literal() {
+        let cases = vec![
+            ("[1, 2*2, 3 + 3]", "[1,(2 * 2),(3 + 3)]"),
+        ];
+        run_cases(&cases);
+    }
+
     fn run_cases(cases: &Vec<(&str, &str)>) {
         for (no, case) in cases.iter().enumerate() {
             let mut parser = Parser::from_string(case.0);
@@ -670,4 +713,3 @@ mod tests {
         }
     }
 }
-//

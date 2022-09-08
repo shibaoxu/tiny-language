@@ -65,6 +65,8 @@ impl<T: BufRead + Seek> Lexer<T> {
                                         ')' => Token::new_rparen(),
                                         '{' => Token::new_lbrace(),
                                         '}' => Token::new_rbrace(),
+                                        '[' => Token::new_lbracket(),
+                                        ']' => Token::new_rbracket(),
                                         ',' => Token::new_comma(),
                                         _ => Token::new_illegal(&c.to_string()),
                                     }
@@ -202,7 +204,8 @@ mod tests {
 
     #[test]
     fn test_next_token_work() {
-        let input = "let five = 5;\
+        let input = "\
+        let five = 5;\
         let ten = 10;\
         let add = fn(x, y) {\
             x + y;\
@@ -216,11 +219,12 @@ mod tests {
             return false;\
         }\
         10 == 10;\
-        10 != 9;\
-        \"foobar\"\
-        \"foo bar\"";
+        10 != 9; \
+        \"foobar\" \
+        \"foo bar\" \
+        [foo, 10] \
+        ";
 
-        println!("{}", input);
         let outputs = vec![
             Token::new_let(), Token::new_identity("five"), Token::new_assign(), Token::new_int("5"), Token::new_semicolon(),
             Token::new_let(), Token::new_identity("ten"), Token::new_assign(), Token::new_int("10"), Token::new_semicolon(),
@@ -239,6 +243,7 @@ mod tests {
             Token::new_int("10"), Token::new_not_eq(), Token::new_int("9"), Token::new_semicolon(),
             Token::new_string("foobar"),
             Token::new_string("foo bar"),
+            Token::new_lbracket(), Token::new_identity("foo"), Token::new_comma(), Token::new_int("10"), Token::new_rbracket(),
             Token::new_eof(),
         ];
 

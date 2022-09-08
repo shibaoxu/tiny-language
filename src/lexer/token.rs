@@ -31,6 +31,8 @@ pub enum TokenType {
     RParen,
     LBrace,
     RBrace,
+    LBracket,
+    RBracket,
 
     // keywords
     Function,
@@ -153,6 +155,14 @@ impl Token {
         Self::new(TokenType::RBrace, "}")
     }
 
+    pub fn new_lbracket() -> Self {
+        Self::new(TokenType::LBracket, "[")
+    }
+
+    pub fn new_rbracket() -> Self {
+        Self::new(TokenType::RBracket, "]")
+    }
+
     pub fn new_fun() -> Self {
         Self::new(TokenType::Function, "fn")
     }
@@ -214,6 +224,8 @@ impl Display for TokenType {
             TokenType::If => "if",
             TokenType::Else => "else",
             TokenType::Return => "return",
+            TokenType::LBracket => "[",
+            TokenType::RBracket => "]"
         })
     }
 }

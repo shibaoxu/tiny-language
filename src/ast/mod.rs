@@ -25,14 +25,6 @@ pub trait Node: Display {
     }
 }
 
-// pub trait Stmt: Node {
-//     fn statement_node(&self) {}
-// }
-//
-// pub trait Expr: Node {
-//     fn expression_node(&self) {}
-// }
-
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Statement {
     LetStmt(LetStatement),
@@ -63,6 +55,7 @@ pub enum Expression {
     IfExpr(IfExpression),
     FuncLiteral(FunctionLiteral),
     CallExpr(CallExpression),
+    ArrLiteral(ArrayLiteral),
 }
 
 impl Display for Expression {
@@ -77,6 +70,7 @@ impl Display for Expression {
             Expression::IfExpr(expr) => f.write_str(&expr.token_literal()),
             Expression::FuncLiteral(expr) => f.write_str(&expr.token_literal()),
             Expression::CallExpr(expr) => f.write_str(&expr.token_literal()),
+            Expression::ArrLiteral(expr) => f.write_str(&expr.token_literal())
         }
     }
 }
@@ -308,3 +302,18 @@ impl Display for CallExpression {
 }
 
 impl Node for CallExpression {}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ArrayLiteral {
+    pub token: Token,
+    pub elements: Vec<Box<Expression>>,
+}
+
+impl Display for ArrayLiteral {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let elements = self.elements.iter().map(|e| e.to_string()).collect::<Vec<_>>().join(",");
+        f.write_fmt(format_args!("[{}]", elements))
+    }
+}
+
+impl Node for ArrayLiteral {}

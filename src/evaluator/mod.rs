@@ -68,6 +68,7 @@ fn eval_expression(expr: &Expression, env: &Environment) -> EvalResult {
         Expression::IfExpr(expr) => eval_if_expression(expr, env),
         Expression::FuncLiteral(expr) => eval_func_literal(expr, env),
         Expression::CallExpr(expr) => eval_call_function(expr, env),
+        Expression::ArrLiteral(_) => EvalResult::new_null_object(),
     }
 }
 
