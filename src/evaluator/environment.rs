@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use crate::evaluator::builtins::BuiltinFunction;
 use crate::evaluator::object::EvalResult;
 
 #[derive(Debug, Clone)]
@@ -22,16 +23,21 @@ impl<'a> Environment<'a> {
         }
     }
 
-    pub fn get(&self, name: &str) -> Option<&EvalResult> {
-        match self.store.get(name) {
-            Some(value) => Some(value),
+    pub fn get(&self, name: &str) -> Option<EvalResult> {
+        let result = match self.store.get(name) {
+            Some(value) => Some(value.clone()),
             None => {
                 match self.outer{
                     None => None,
                     Some(outer) => outer.get(name)
                 }
             }
-        }
+        };
+
+        // builtin function
+        result.or_else(||{
+            BuiltinFunction::lookup(name).map(|e| EvalResult::new_builtin_object(e))
+        })
     }
 
     pub fn set(&mut self, name: &str, value: EvalResult) -> Option<EvalResult> {

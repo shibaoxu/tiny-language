@@ -1,6 +1,7 @@
 use crate::ast::{BlockStatement, Identifier};
+use crate::evaluator::builtins::{BuiltinFunction};
 
-use crate::evaluator::object::EvalResult::{BoolObj, ErrorObj, FunObj, IntObj, NullObj, StrObj};
+use crate::evaluator::object::EvalResult::{BoolObj, BuiltinObj, ErrorObj, FunObj, IntObj, NullObj, StrObj};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum EvalResult {
@@ -10,6 +11,7 @@ pub enum EvalResult {
     NullObj(NullObject),
     ErrorObj(ErrorObject),
     FunObj(FunctionObject),
+    BuiltinObj(BuiltinObject),
 }
 
 impl EvalValue for EvalResult {
@@ -21,6 +23,7 @@ impl EvalValue for EvalResult {
             NullObj(v) => v.inspect(),
             ErrorObj(v) => v.inspect(),
             FunObj(v) => v.inspect(),
+            BuiltinObj(v) => v.inspect(),
         }
     }
 
@@ -32,6 +35,7 @@ impl EvalValue for EvalResult {
             NullObj(v) => v.is_return(),
             ErrorObj(v) => v.is_return(),
             FunObj(v) => v.is_return(),
+            BuiltinObj(v) => v.is_return(),
         }
     }
 
@@ -43,6 +47,7 @@ impl EvalValue for EvalResult {
             NullObj(v) => v.set_return(),
             ErrorObj(v) => v.set_return(),
             FunObj(v) => v.set_return(),
+            BuiltinObj(v) => v.set_return(),
         }
     }
 }
@@ -82,6 +87,10 @@ impl EvalResult {
         })
     }
 
+    pub fn new_builtin_object(func: BuiltinFunction) -> EvalResult {
+        BuiltinObj(BuiltinObject { function: func, is_return: false })
+    }
+
     pub fn is_error(&self) -> bool {
         if let ErrorObj(_) = self {
             true
@@ -98,6 +107,14 @@ impl EvalResult {
             NullObj(_) => false,
             ErrorObj(_) => true,
             FunObj(_) => true,
+            BuiltinObj(_) => true,
+        }
+    }
+
+    pub fn is_builtin(&self) -> bool{
+        match self {
+            BuiltinObj(_) => true,
+            _ => false,
         }
     }
 
@@ -140,6 +157,14 @@ impl EvalResult {
             Err(format!("{} is not a ErrorObject", self.inspect()))
         }
     }
+
+    pub fn convert_to_builtin(&self) -> Result<BuiltinObject, String> {
+        if let BuiltinObj(v) = self {
+            Ok(v.clone())
+        } else {
+            Err(format!("{} is not a BuiltinObject", self.inspect()))
+        }
+    }
     pub fn get_type(&self) -> &'static str {
         match self {
             IntObj(_) => "INTEGER",
@@ -148,6 +173,7 @@ impl EvalResult {
             NullObj(_) => "NULL",
             ErrorObj(_) => "ERROR",
             FunObj(_) => "FUNCTION",
+            BuiltinObj(_) => "BUILTIN",
         }
     }
 }
@@ -280,5 +306,25 @@ impl EvalValue for FunctionObject {
 
     fn set_return(&mut self) {
         self.is_return = true
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BuiltinObject {
+    pub function: BuiltinFunction,
+    pub is_return: bool,
+}
+
+impl EvalValue for BuiltinObject {
+    fn inspect(&self) -> String {
+        self.function.to_string()
+    }
+
+    fn is_return(&self) -> bool {
+        false
+    }
+
+    fn set_return(&mut self) {
+        self.is_return = true;
     }
 }

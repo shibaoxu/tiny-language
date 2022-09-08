@@ -1,10 +1,11 @@
 use crate::ast::{BlockStatement, CallExpression, Expression, ExpressionStatement, FunctionLiteral, Identifier, IfExpression, InfixExpression, LetStatement, Node, PrefixExpression, Program, ReturnStatement, Statement};
 use crate::evaluator::environment::Environment;
-use crate::evaluator::object::{EvalResult, EvalValue};
+use crate::evaluator::object::{BuiltinObject, EvalResult, EvalValue, FunctionObject};
 use crate::TokenType;
 
 pub mod object;
 pub mod environment;
+mod builtins;
 
 pub fn eval(program: &Program, env: &mut Environment) -> EvalResult {
     eval_statements(&program.statements, env)
@@ -145,7 +146,7 @@ fn eval_infix_expression(expr: &InfixExpression, env: &Environment) -> EvalResul
                 _ => EvalResult::new_error_object(&format!("unknown operator: {} {} {}", left.get_type(), operator, right.get_type())),
             }
         }
-        EvalResult::StrObj(_) =>{
+        EvalResult::StrObj(_) => {
             let lval = left.convert_to_string().unwrap();
             let rval = right.convert_to_string().unwrap();
             match operator {
@@ -183,45 +184,50 @@ fn eval_call_function(expr: &CallExpression, env: &Environment) -> EvalResult {
 
     // 获得函数的定义
     let func_define = eval_expression(expr.function.as_ref(), env);
-    let func_define = match func_define {
-        EvalResult::ErrorObj(_) => return func_define,
-        EvalResult::FunObj(f) => f,
-        _ => return EvalResult::new_error_object(&format!("{} is not a function", func_define.inspect())),
-    };
+    match func_define {
+        EvalResult::FunObj(func) => eval_apply_func(&func, &expr.arguments, env),
+        EvalResult::BuiltinObj(func) => eval_builtin_func(&func, &expr.arguments, env),
+        EvalResult::ErrorObj(_) => func_define,
+        _ => EvalResult::new_error_object(&format!("{} is not a function", func_define.inspect())),
+    }
+}
 
-    // 判断函数定义的参数数量和实际调用的参数数量是否相同
-    if func_define.parameters.len() != expr.arguments.len() {
-        return EvalResult::new_error_object(&format!("this function take {} parameters but {} parameter was supplied", expr.arguments.len(), func_define.parameters.len()));
+
+fn eval_builtin_func(func: &BuiltinObject, args: &Vec<Box<Expression>>, env: &Environment) -> EvalResult {
+    let actual_args = eval_func_actual_arguments(args, env);
+    func.function.execute(&actual_args)
+}
+
+fn eval_apply_func(func: &FunctionObject, args: &Vec<Box<Expression>>, env: &Environment) -> EvalResult {
+    if func.parameters.len() != args.len() {
+        return EvalResult::new_error_object(&format!("this function take {} parameters but {} parameter was supplied", func.parameters.len(), args.len()));
     }
 
-    // 计算实参的值
-    let args = expr.arguments.iter().map(|e| e.as_ref().clone()).collect::<Vec<_>>();
-    let args = eval_expressions(&args, env);
-    let args = match args {
-        Ok(v) => v,
-        Err(e) => return e,
-    };
+    // compute the actual arguments
+    let actual_args = eval_func_actual_arguments(args, env);
+    let error_arg = actual_args.iter().find(|e| e.is_error());
+    if error_arg.is_some(){
+        return error_arg.unwrap().clone();
+    }
 
-    // 扩充env
+    // extend environment
     let mut inner_env = env.new_closure();
-    for (i, arg) in func_define.parameters.iter().enumerate() {
-        let val_of_arg = args.get(i).unwrap().clone();
+    for (i, arg) in func.parameters.iter().enumerate() {
+        let val_of_arg = actual_args.get(i).unwrap().clone();
         inner_env.set(&arg.token_literal(), val_of_arg);
     }
 
-    eval_block_statement(&func_define.body, &inner_env)
+    eval_block_statement(&func.body, &inner_env)
 }
 
-fn eval_expressions(exprs: &Vec<Expression>, env: &Environment) -> Result<Vec<EvalResult>, EvalResult> {
+// 用于计算参数的实际值
+fn eval_func_actual_arguments(exprs: &Vec<Box<Expression>>, env: &Environment) -> Vec<EvalResult> {
     let mut result = vec![];
-    for expr in exprs {
+    for expr in exprs.iter().map(|e| e.as_ref()) {
         let val = eval_expression(expr, env);
-        if val.is_error() {
-            return Err(val);
-        }
         result.push(val);
     }
-    Ok(result)
+    result
 }
 
 #[cfg(test)]
@@ -254,7 +260,7 @@ mod tests {
     }
 
     #[test]
-    fn test_eval_string_expression(){
+    fn test_eval_string_expression() {
         let cases = vec![
             ("\"foo\"", EvalResult::new_string_object("foo")),
             ("\"foo bar\"", EvalResult::new_string_object("foo bar")),
@@ -434,6 +440,20 @@ mod tests {
               };\
               ourFunction(20) + first + second;",
              EvalResult::new_int_object(70))
+        ];
+        run_cases(&cases);
+    }
+
+    #[test]
+    fn test_builtin_function(){
+        let cases = vec![
+            ("len(\"\")", EvalResult::new_int_object(0)),
+            ("let s = \"\"; len(s);", EvalResult::new_int_object(0)),
+            ("len(\"four\")", EvalResult::new_int_object(4)),
+            ("len(\"hello world\")", EvalResult::new_int_object(11)),
+            ("len(1)", EvalResult::new_error_object("argument to `len` not supported, got INTEGER")),
+            ("len(\"one\", \"two\")", EvalResult::new_error_object("wrong number of arguments. got=2, want=1")),
+
         ];
         run_cases(&cases);
     }
