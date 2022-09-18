@@ -1,14 +1,14 @@
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-pub enum TokenType {
-    Illegal,
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+pub enum Token {
+    Illegal(String),
     EOF,
 
-    Identity,
-    Int,
-    String,
+    Identity(String),
+    Int(i64),
+    String(String),
 
     Assign,
     Plus,
@@ -44,188 +44,82 @@ pub enum TokenType {
     Return,
 }
 
-impl TokenType {
-    pub fn lookup_ident(ident: &str) -> TokenType {
-        match ident {
-            "fn" => TokenType::Function,
-            "let" => TokenType::Let,
-            "true" => TokenType::True,
-            "false" => TokenType::False,
-            "if" => TokenType::If,
-            "else" => TokenType::Else,
-            "return" => TokenType::Return,
-            _ => TokenType::Identity,
-        }
-    }
-}
-
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub struct Token {
-    pub token_type: TokenType,
-    pub literal: String,
-}
-
 impl Token {
-    pub fn new(token_type: TokenType, literal: &str) -> Self {
-        Self {
-            token_type,
-            literal: literal.into(),
+    pub fn lookup_ident(ident: &str) -> Token {
+        match ident {
+            "fn" => Token::Function,
+            "let" => Token::Let,
+            "true" => Token::True,
+            "false" => Token::False,
+            "if" => Token::If,
+            "else" => Token::Else,
+            "return" => Token::Return,
+            _ => Token::Identity(String::from(ident)),
         }
     }
-    pub fn new_illegal(literal: &str) -> Self {
-        Self::new(TokenType::Illegal, literal)
-    }
-    pub fn new_eof() -> Self {
-        Self::new(TokenType::EOF, "eof")
-    }
-    pub fn new_identity(literal: &str) -> Self {
-        Self::new(TokenType::Identity, literal)
-    }
-    pub fn new_int(literal: &str) -> Self {
-        Self::new(TokenType::Int, literal)
-    }
-    pub fn new_string(literal: &str) -> Self { Self::new(TokenType::String, literal) }
-    pub fn new_assign() -> Self {
-        Self::new(TokenType::Assign, "=")
-    }
-    pub fn new_plus() -> Self {
-        Self::new(TokenType::Plus, "+")
-    }
-    pub fn new_minus() -> Self {
-        Self::new(TokenType::Minus, "-")
+
+    pub fn to_placeholder(&self) -> Self{
+        match self {
+            Token::Illegal(_) => Token::illegal_placeholder(),
+            Token::Identity(_) => Token::identify_placeholder(),
+            Token::Int(_) => Token::int_placeholder(),
+            Token::String(_) => Token::string_placeholder(),
+            _ => self.clone()
+        }
     }
 
-    pub fn new_bang() -> Self {
-        Self::new(TokenType::Bang, "!")
+    pub fn identify_placeholder() -> Self {
+        Token::Identity("_".into())
     }
 
-    pub fn new_asterisk() -> Self {
-        Self::new(TokenType::Asterisk, "*")
+    pub fn int_placeholder() -> Self {
+        Token::Int(0)
     }
 
-    pub fn new_slash() -> Self {
-        Self::new(TokenType::Slash, "/")
+    pub fn string_placeholder() -> Self {
+        Token::String("_".into())
     }
 
-    pub fn new_lt() -> Self {
-        Self::new(TokenType::LT, "<")
-    }
-
-    pub fn new_gt() -> Self {
-        Self::new(TokenType::GT, ">")
-    }
-
-    pub fn new_eq() -> Self {
-        Self::new(TokenType::EQ, "==")
-    }
-
-    pub fn new_not_eq() -> Self {
-        Self::new(TokenType::NotEq, "!=")
-    }
-
-    pub fn new_le() -> Self {
-        Self::new(TokenType::Let, "<=")
-    }
-
-    pub fn new_ge() -> Self {
-        Self::new(TokenType::GE, ">=")
-    }
-
-    pub fn new_comma() -> Self {
-        Self::new(TokenType::Comma, ",")
-    }
-
-    pub fn new_semicolon() -> Self {
-        Self::new(TokenType::Semicolon, ";")
-    }
-
-    pub fn new_lparen() -> Self {
-        Self::new(TokenType::LParen, "(")
-    }
-
-    pub fn new_rparen() -> Self {
-        Self::new(TokenType::RParen, ")")
-    }
-
-    pub fn new_lbrace() -> Self {
-        Self::new(TokenType::LBrace, "{")
-    }
-
-    pub fn new_rbrace() -> Self {
-        Self::new(TokenType::RBrace, "}")
-    }
-
-    pub fn new_lbracket() -> Self {
-        Self::new(TokenType::LBracket, "[")
-    }
-
-    pub fn new_rbracket() -> Self {
-        Self::new(TokenType::RBracket, "]")
-    }
-
-    pub fn new_fun() -> Self {
-        Self::new(TokenType::Function, "fn")
-    }
-    pub fn new_let() -> Self {
-        Self::new(TokenType::Let, "let")
-    }
-
-    pub fn new_true() -> Self {
-        Self::new(TokenType::True, "true")
-    }
-
-    pub fn new_false() -> Self {
-        Self::new(TokenType::False, "false")
-    }
-
-    pub fn new_if() -> Self {
-        Self::new(TokenType::If, "if")
-    }
-
-    pub fn new_else() -> Self {
-        Self::new(TokenType::Else, "else")
-    }
-
-    pub fn new_return() -> Self {
-        Self::new(TokenType::Return, "return")
+    pub fn illegal_placeholder() -> Self {
+        Token::Illegal("_".into())
     }
 }
 
-impl Display for TokenType {
+impl Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            TokenType::Illegal => "illegal",
-            TokenType::EOF => "eof",
-            TokenType::Identity => "identity",
-            TokenType::Int => "INTEGER",
-            TokenType::String => "String",
-            TokenType::Assign => "=",
-            TokenType::Plus => "+",
-            TokenType::Minus => "-",
-            TokenType::Bang => "!",
-            TokenType::Asterisk => "*",
-            TokenType::Slash => "/",
-            TokenType::LT => "<",
-            TokenType::GT => ">",
-            TokenType::EQ => "==",
-            TokenType::NotEq => "!=",
-            TokenType::LE => "<=",
-            TokenType::GE => ">=",
-            TokenType::Comma => ",",
-            TokenType::Semicolon => ";",
-            TokenType::LParen => "(",
-            TokenType::RParen => ")",
-            TokenType::LBrace => "{",
-            TokenType::RBrace => "}",
-            TokenType::Function => "fn",
-            TokenType::Let => "let",
-            TokenType::True => "true",
-            TokenType::False => "false",
-            TokenType::If => "if",
-            TokenType::Else => "else",
-            TokenType::Return => "return",
-            TokenType::LBracket => "[",
-            TokenType::RBracket => "]"
+        f.write_str(&match self {
+            Token::Illegal(v) => format!("illegal {}", v),
+            Token::EOF => "eof".into(),
+            Token::Identity(v) => format!("{}", v),
+            Token::Int(v) => format!("{}", v),
+            Token::String(v) => format!("{}", v),
+            Token::Assign => "=".into(),
+            Token::Plus => "+".into(),
+            Token::Minus => "-".into(),
+            Token::Bang => "!".into(),
+            Token::Asterisk => "*".into(),
+            Token::Slash => "/".into(),
+            Token::LT => "<".into(),
+            Token::GT => ">".into(),
+            Token::EQ => "==".into(),
+            Token::NotEq => "!=".into(),
+            Token::LE => "<=".into(),
+            Token::GE => ">=".into(),
+            Token::Comma => ",".into(),
+            Token::Semicolon => ";".into(),
+            Token::LParen => "(".into(),
+            Token::RParen => ")".into(),
+            Token::LBrace => "{".into(),
+            Token::RBrace => "}".into(),
+            Token::Function => "fn".into(),
+            Token::Let => "let".into(),
+            Token::True => "true".into(),
+            Token::False => "false".into(),
+            Token::If => "if".into(),
+            Token::Else => "else".into(),
+            Token::Return => "return".into(),
+            Token::LBracket => "[".into(),
+            Token::RBracket => "]".into()
         })
     }
 }

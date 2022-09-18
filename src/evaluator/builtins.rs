@@ -1,24 +1,26 @@
 use std::fmt::{Debug, Display, Formatter};
-use crate::evaluator::object::EvalResult;
+use crate::evaluator::object::{ObjectType, Value};
+use anyhow::{Result, format_err};
 
 pub trait Builtin: Debug {
-    fn execute(&self, args: &Vec<EvalResult>) -> EvalResult;
+    fn execute(&self, args: &Vec<Value>) -> Result<Value>;
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Len;
+
 impl Builtin for Len {
-    fn execute(&self, args: &Vec<EvalResult>) -> EvalResult {
+    fn execute(&self, args: &Vec<Value>) -> Result<Value> {
         if args.len() != 1 {
-            return EvalResult::new_error_object(&format!("wrong number of arguments. got={}, want=1", args.len()));
+            return Err(format_err!("wrong number of arguments. got={}, want=1", args.len()));
         }
         let arg = args.get(0).unwrap();
-        if arg.get_type() != "STRING" {
-            return EvalResult::new_error_object(&format!("argument to `len` not supported, got {}", arg.get_type()));
+        if arg.type_of != ObjectType::String {
+            return Err(format_err!("argument to `len` not supported, got {}", arg.type_of));
         }
 
-        let arg = arg.convert_to_string().unwrap();
-        EvalResult::new_int_object(arg.len() as i64)
+        let arg = String::try_from(arg)?;
+        Ok(Value::from(arg.len() as i64))
     }
 }
 
@@ -35,14 +37,14 @@ impl BuiltinFunction {
         }
     }
 
-    pub fn execute(&self, args: &Vec<EvalResult>)->EvalResult{
+    pub fn execute(&self, args: &Vec<Value>) -> Result<Value> {
         match self {
             BuiltinFunction::Len(f) => f.execute(args)
         }
     }
 }
 
-impl Display for BuiltinFunction{
+impl Display for BuiltinFunction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let r = match self {
             BuiltinFunction::Len(_) => "builtin/len",

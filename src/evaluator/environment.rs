@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use crate::evaluator::builtins::BuiltinFunction;
-use crate::evaluator::object::EvalResult;
+use crate::evaluator::object::Value;
 
 #[derive(Debug, Clone)]
 pub struct Environment<'a> {
-    store: HashMap<String, EvalResult>,
+    store: HashMap<String, Value>,
     outer: Option<&'a Environment<'a>>,
 }
 
@@ -23,7 +23,7 @@ impl<'a> Environment<'a> {
         }
     }
 
-    pub fn get(&self, name: &str) -> Option<EvalResult> {
+    pub fn get(&self, name: &str) -> Option<Value> {
         let result = match self.store.get(name) {
             Some(value) => Some(value.clone()),
             None => {
@@ -36,30 +36,30 @@ impl<'a> Environment<'a> {
 
         // builtin function
         result.or_else(||{
-            BuiltinFunction::lookup(name).map(|e| EvalResult::new_builtin_object(e))
+            BuiltinFunction::lookup(name).map(|e| Value::from(e))
         })
     }
 
-    pub fn set(&mut self, name: &str, value: EvalResult) -> Option<EvalResult> {
+    pub fn set(&mut self, name: &str, value: Value) -> Option<Value> {
         self.store.insert(name.into(), value)
     }
 }
 #[cfg(test)]
 mod tests {
     use crate::evaluator::environment::Environment;
-    use crate::evaluator::object::{EvalResult, EvalValue};
+    use crate::evaluator::object::Value;
 
     #[test]
     fn test_env_work() {
         let mut env0 = Environment::new();
-        env0.set("foo", EvalResult::new_int_object(1));
-        env0.set("bar", EvalResult::new_int_object(2));
+        env0.set("foo", Value::from(1));
+        env0.set("bar", Value::from(2));
 
         let mut env1 = env0.new_closure();
-        env1.set("foo1", EvalResult::new_int_object(11));
-        env1.set("bar1", EvalResult::new_int_object(12));
-        env1.set("foo", EvalResult::new_int_object(100));
-        env1.set("bar", EvalResult::new_int_object(200));
+        env1.set("foo1", Value::from(11));
+        env1.set("bar1", Value::from(12));
+        env1.set("foo", Value::from(100));
+        env1.set("bar", Value::from(200));
 
         // let a = env1.get("foo1").unwrap();
         // eprintln!("{}",a.inspect());

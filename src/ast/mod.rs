@@ -46,31 +46,31 @@ impl Display for Statement {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Expression {
-    Identifier(Identifier),
-    BoolLiteral(BooleanLiteral),
-    IntLiteral(IntegerLiteral),
-    StrLiteral(StringLiteral),
+    IdentExpr(Identifier),
+    BoolExpr(BooleanLiteral),
+    IntExpr(IntegerLiteral),
+    StrExpr(StringLiteral),
     PrefixExpr(PrefixExpression),
     InfixExpr(InfixExpression),
     IfExpr(IfExpression),
-    FuncLiteral(FunctionLiteral),
+    FuncExpr(FunctionLiteral),
     CallExpr(CallExpression),
-    ArrLiteral(ArrayLiteral),
+    ArrayExpr(ArrayLiteral),
 }
 
 impl Display for Expression {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Expression::Identifier(expr) => f.write_str(&expr.token_literal()),
-            Expression::BoolLiteral(expr) => f.write_str(&expr.token_literal()),
-            Expression::IntLiteral(expr) => f.write_str(&expr.token_literal()),
-            Expression::StrLiteral(expr) => f.write_str(&expr.token_literal()),
+            Expression::IdentExpr(expr) => f.write_str(&expr.token_literal()),
+            Expression::BoolExpr(expr) => f.write_str(&expr.token_literal()),
+            Expression::IntExpr(expr) => f.write_str(&expr.token_literal()),
+            Expression::StrExpr(expr) => f.write_str(&expr.token_literal()),
             Expression::PrefixExpr(expr) => f.write_str(&expr.token_literal()),
             Expression::InfixExpr(expr) => f.write_str(&expr.token_literal()),
             Expression::IfExpr(expr) => f.write_str(&expr.token_literal()),
-            Expression::FuncLiteral(expr) => f.write_str(&expr.token_literal()),
+            Expression::FuncExpr(expr) => f.write_str(&expr.token_literal()),
             Expression::CallExpr(expr) => f.write_str(&expr.token_literal()),
-            Expression::ArrLiteral(expr) => f.write_str(&expr.token_literal())
+            Expression::ArrayExpr(expr) => f.write_str(&expr.token_literal())
         }
     }
 }
@@ -108,7 +108,7 @@ pub struct LetStatement {
 
 impl Display for LetStatement {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {} = {};", self.token.literal, self.name.to_string(), self.value.to_string())
+        write!(f, "{} {} = {};", self.token, self.name, self.value)
     }
 }
 
@@ -124,7 +124,7 @@ impl Node for ReturnStatement {}
 
 impl Display for ReturnStatement {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {};", self.token.literal, self.value.to_string())
+        write!(f, "{} {};", self.token, self.value)
     }
 }
 
@@ -139,7 +139,7 @@ impl Node for ExpressionStatement {}
 
 impl Display for ExpressionStatement {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.expression.to_string())
+        write!(f, "{}", self.expression)
     }
 }
 
@@ -153,7 +153,7 @@ impl Display for BlockStatement {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str("{")?;
         for stmt in self.statements.iter() {
-            write!(f, "{}", stmt.to_string())?;
+            write!(f, "{}", stmt)?;
         }
         f.write_str("}")?;
         Ok(())
@@ -169,7 +169,7 @@ pub struct Identifier {
 
 impl Display for Identifier {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.token.literal)
+        write!(f, "{}", self.token)
     }
 }
 
@@ -183,7 +183,7 @@ pub struct IntegerLiteral {
 
 impl Display for IntegerLiteral {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.token.literal)
+        write!(f, "{}", self.token)
     }
 }
 
@@ -197,7 +197,7 @@ pub struct StringLiteral {
 
 impl Display for StringLiteral {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.token.literal)
+        f.write_str(&self.token.to_string())
     }
 }
 
@@ -229,7 +229,7 @@ pub struct InfixExpression {
 
 impl Display for InfixExpression {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({} {} {})", self.left.to_string(), self.operator.to_string(), self.right.to_string())
+        write!(f, "({} {} {})", self.left, self.operator, self.right)
     }
 }
 
@@ -249,8 +249,6 @@ impl Display for BooleanLiteral {
 
 impl Node for BooleanLiteral {}
 
-// impl Expr for BooleanLiteral {}
-
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct IfExpression {
     pub token: Token,
@@ -261,9 +259,9 @@ pub struct IfExpression {
 
 impl Display for IfExpression {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "if {} {}", self.condition.to_string(), self.consequence.to_string())?;
+        write!(f, "if {} {}", self.condition, self.consequence)?;
         if self.alternative.is_some() {
-            write!(f, " else {}", self.alternative.as_ref().unwrap().to_string())?;
+            write!(f, " else {}", self.alternative.as_ref().unwrap())?;
         }
         Ok(())
     }
@@ -274,14 +272,14 @@ impl Node for IfExpression {}
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct FunctionLiteral {
     pub token: Token,
-    pub parameters: Vec<Identifier>,
+    pub parameters: Vec<Expression>,
     pub body: BlockStatement,
 }
 
 impl Display for FunctionLiteral {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let paras = self.parameters.iter().map(|e| e.token.literal.clone()).collect::<Vec<_>>().join(",");
-        write!(f, "{} ({}) {}", self.token.literal, paras, self.body)
+        let paras = self.parameters.iter().map(|e| e.to_string()).collect::<Vec<_>>().join(",");
+        write!(f, "{} ({}) {}", self.token, paras, self.body)
     }
 }
 

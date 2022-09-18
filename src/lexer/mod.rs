@@ -1,7 +1,6 @@
 use std::fs::File;
 use std::io::{BufRead, BufReader, Cursor, Seek, SeekFrom};
 use crate::lexer::token::Token;
-pub use crate::lexer::token::TokenType;
 
 pub mod token;
 
@@ -32,7 +31,7 @@ impl<T: BufRead + Seek> Lexer<T> {
     pub fn next_token(&mut self) -> Token {
         let mut state = State::Start;
         let mut buf = String::new();
-        let mut token: Token = Token::new(TokenType::EOF, "eof");
+        let mut token: Token = Token::EOF;
         while state != State::Done {
             match self.read_char() {
                 Some(c) => {
@@ -56,19 +55,19 @@ impl<T: BufRead + Seek> Lexer<T> {
                                 _ => {
                                     state = State::Done;
                                     token = match c {
-                                        '+' => Token::new_plus(),
-                                        '-' => Token::new_minus(),
-                                        '*' => Token::new_asterisk(),
-                                        '/' => Token::new_slash(),
-                                        ';' => Token::new_semicolon(),
-                                        '(' => Token::new_lparen(),
-                                        ')' => Token::new_rparen(),
-                                        '{' => Token::new_lbrace(),
-                                        '}' => Token::new_rbrace(),
-                                        '[' => Token::new_lbracket(),
-                                        ']' => Token::new_rbracket(),
-                                        ',' => Token::new_comma(),
-                                        _ => Token::new_illegal(&c.to_string()),
+                                        '+' => Token::Plus,
+                                        '-' => Token::Minus,
+                                        '*' => Token::Asterisk,
+                                        '/' => Token::Slash,
+                                        ';' => Token::Semicolon,
+                                        '(' => Token::LParen,
+                                        ')' => Token::RParen,
+                                        '{' => Token::LBrace,
+                                        '}' => Token::RBrace,
+                                        '[' => Token::LBracket,
+                                        ']' => Token::RBracket,
+                                        ',' => Token::Comma,
+                                        _ => Token::Illegal(c.to_string()),
                                     }
                                 }
                             }
@@ -76,36 +75,36 @@ impl<T: BufRead + Seek> Lexer<T> {
                         State::GreatEqual => {
                             state = State::Done;
                             if c == '=' {
-                                token = Token::new(TokenType::GE, ">=");
+                                token = Token::GE;
                             } else {
-                                token = Token::new(TokenType::GT, ">");
+                                token = Token::GT;
                                 self.back();
                             }
                         }
                         State::LessEqual => {
                             state = State::Done;
                             if c == '=' {
-                                token = Token::new(TokenType::LE, "<=");
+                                token = Token::LE;
                             } else {
-                                token = Token::new(TokenType::LT, "<");
+                                token = Token::LT;
                                 self.back();
                             }
                         }
                         State::NotEqual => {
                             state = State::Done;
                             if c == '=' {
-                                token = Token::new(TokenType::NotEq, "!=");
+                                token = Token::NotEq;
                             } else {
-                                token = Token::new(TokenType::Bang, "!");
+                                token = Token::Bang;
                                 self.back();
                             }
                         }
                         State::Equal => {
                             state = State::Done;
                             if c == '=' {
-                                token = Token::new(TokenType::EQ, "==");
+                                token = Token::EQ;
                             } else {
-                                token = Token::new(TokenType::Assign, "=");
+                                token = Token::Assign;
                                 self.back();
                             }
                         }
@@ -115,7 +114,7 @@ impl<T: BufRead + Seek> Lexer<T> {
                                 continue;
                             } else {
                                 state = State::Done;
-                                token = Token::new(TokenType::lookup_ident(&buf), &buf);
+                                token = Token::lookup_ident(&buf);
                                 self.back();
                             }
                         }
@@ -125,14 +124,14 @@ impl<T: BufRead + Seek> Lexer<T> {
                                 continue;
                             } else {
                                 state = State::Done;
-                                token = Token::new(TokenType::Int, &buf);
+                                token = Token::Int(buf.parse::<i64>().unwrap());
                                 self.back();
                             }
                         }
                         State::String => {
                             if c == '"' {
                                 state = State::Done;
-                                token = Token::new_string(&buf);
+                                token = Token::String(buf.clone());
                             } else {
                                 buf.push_str(&String::from(c));
                                 continue;
@@ -145,15 +144,15 @@ impl<T: BufRead + Seek> Lexer<T> {
                 }
                 None => {
                     token = match state {
-                        State::Start => Token::new(TokenType::EOF, "eof"),
+                        State::Start => Token::EOF,
                         State::Done => panic!("should not arrive here"),
-                        State::GreatEqual => Token::new(TokenType::GT, ">"),
-                        State::LessEqual => Token::new(TokenType::LT, "<"),
-                        State::NotEqual => Token::new(TokenType::Illegal, "!"),
-                        State::Equal => Token::new(TokenType::Assign, "="),
-                        State::Int => Token::new(TokenType::Int, &buf),
-                        State::String => Token::new_illegal(&buf),
-                        State::Word => Token::new(TokenType::lookup_ident(&buf), &buf),
+                        State::GreatEqual => Token::GT,
+                        State::LessEqual => Token::LT,
+                        State::NotEqual => Token::Bang,
+                        State::Equal => Token::Assign,
+                        State::Int => Token::Int(buf.parse().unwrap()),
+                        State::String => Token::Illegal(buf.clone()),
+                        State::Word => Token::lookup_ident(&buf),
                     };
                     state = State::Done;
                 }
@@ -226,25 +225,25 @@ mod tests {
         ";
 
         let outputs = vec![
-            Token::new_let(), Token::new_identity("five"), Token::new_assign(), Token::new_int("5"), Token::new_semicolon(),
-            Token::new_let(), Token::new_identity("ten"), Token::new_assign(), Token::new_int("10"), Token::new_semicolon(),
-            Token::new_let(), Token::new_identity("add"), Token::new_assign(), Token::new_fun(), Token::new_lparen(), Token::new_identity("x"), Token::new_comma(), Token::new_identity("y"), Token::new_rparen(), Token::new_lbrace(),
-            Token::new_identity("x"), Token::new_plus(), Token::new_identity("y"), Token::new_semicolon(),
-            Token::new_rbrace(), Token::new_semicolon(),
-            Token::new_let(), Token::new_identity("result"), Token::new_assign(), Token::new_identity("add"), Token::new_lparen(), Token::new_identity("five"), Token::new_comma(), Token::new_identity("ten"), Token::new_rparen(), Token::new_semicolon(),
-            Token::new_bang(), Token::new_minus(), Token::new_slash(), Token::new_asterisk(), Token::new_int("5"), Token::new_semicolon(),
-            Token::new_int("5"), Token::new_lt(), Token::new_int("10"), Token::new_gt(), Token::new_int("5"), Token::new_semicolon(),
-            Token::new_if(), Token::new_lparen(), Token::new_int("5"), Token::new_lt(), Token::new_int("10"), Token::new_rparen(), Token::new_lbrace(),
-            Token::new_return(), Token::new_true(), Token::new_semicolon(),
-            Token::new_rbrace(), Token::new_else(), Token::new_lbrace(),
-            Token::new_return(), Token::new_false(), Token::new_semicolon(),
-            Token::new_rbrace(),
-            Token::new_int("10"), Token::new_eq(), Token::new_int("10"), Token::new_semicolon(),
-            Token::new_int("10"), Token::new_not_eq(), Token::new_int("9"), Token::new_semicolon(),
-            Token::new_string("foobar"),
-            Token::new_string("foo bar"),
-            Token::new_lbracket(), Token::new_identity("foo"), Token::new_comma(), Token::new_int("10"), Token::new_rbracket(),
-            Token::new_eof(),
+            Token::Let, Token::Identity("five".to_string()), Token::Assign, Token::Int(5), Token::Semicolon,
+            Token::Let, Token::Identity("ten".to_string()), Token::Assign, Token::Int(10), Token::Semicolon,
+            Token::Let, Token::Identity("add".to_string()), Token::Assign, Token::Function, Token::LParen, Token::Identity("x".to_string()), Token::Comma, Token::Identity("y".to_string()), Token::RParen, Token::LBrace,
+            Token::Identity("x".to_string()), Token::Plus, Token::Identity("y".to_string()), Token::Semicolon,
+            Token::RBrace, Token::Semicolon,
+            Token::Let, Token::Identity("result".to_string()), Token::Assign, Token::Identity("add".to_string()), Token::LParen, Token::Identity("five".to_string()), Token::Comma, Token::Identity("ten".to_string()), Token::RParen, Token::Semicolon,
+            Token::Bang, Token::Minus, Token::Slash, Token::Asterisk, Token::Int(5), Token::Semicolon,
+            Token::Int(5), Token::LT, Token::Int(10), Token::GT, Token::Int(5), Token::Semicolon,
+            Token::If, Token::LParen, Token::Int(5), Token::LT, Token::Int(10), Token::RParen, Token::LBrace,
+            Token::Return, Token::True, Token::Semicolon,
+            Token::RBrace, Token::Else, Token::LBrace,
+            Token::Return, Token::False, Token::Semicolon,
+            Token::RBrace,
+            Token::Int(10), Token::EQ, Token::Int(10), Token::Semicolon,
+            Token::Int(10), Token::NotEq, Token::Int(9), Token::Semicolon,
+            Token::String("foobar".to_string()),
+            Token::String("foo bar".to_string()),
+            Token::LBracket, Token::Identity("foo".to_string()), Token::Comma, Token::Int(10), Token::RBracket,
+            Token::EOF,
         ];
 
         let mut lexer_string = Lexer::from_str(input);
