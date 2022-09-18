@@ -1,20 +1,3 @@
-//
-//                          |-- LetStatement
-//     |------ Statement--- |-- ExpressionStatement
-//     |                    |-- ReturnStatement
-//     |                    |-- BlockStatement
-//     |
-// Node|----- Program
-//     |                    |-- Identifier
-//     |                    |-- BooleanLiteral
-//     |                    |-- IntegerLiteral
-//     |----- Expression -- |-- PrefixExpression
-//                          |-- InfixExpression
-//                          |-- IfExpression
-//                          |-- FunctionLiteral
-//                          |-- CallExpression
-//
-
 use std::fmt::{Display, Formatter};
 
 use crate::lexer::token::Token;
@@ -56,6 +39,7 @@ pub enum Expression {
     FuncExpr(FunctionLiteral),
     CallExpr(CallExpression),
     ArrayExpr(ArrayLiteral),
+    ArrayIndex(ArrayIndex),
 }
 
 impl Display for Expression {
@@ -70,7 +54,8 @@ impl Display for Expression {
             Expression::IfExpr(expr) => f.write_str(&expr.token_literal()),
             Expression::FuncExpr(expr) => f.write_str(&expr.token_literal()),
             Expression::CallExpr(expr) => f.write_str(&expr.token_literal()),
-            Expression::ArrayExpr(expr) => f.write_str(&expr.token_literal())
+            Expression::ArrayExpr(expr) => f.write_str(&expr.token_literal()),
+            Expression::ArrayIndex(expr) => f.write_str(&expr.token_literal())
         }
     }
 }
@@ -311,6 +296,20 @@ impl Display for ArrayLiteral {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let elements = self.elements.iter().map(|e| e.to_string()).collect::<Vec<_>>().join(",");
         f.write_fmt(format_args!("[{}]", elements))
+    }
+}
+impl Node for ArrayIndex {}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ArrayIndex{
+    pub token: Token,
+    pub name: Box<Expression>,
+    pub index: Box<Expression>,
+}
+
+impl Display for ArrayIndex {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&format!("({}[{}])", self.name, self.index))
     }
 }
 

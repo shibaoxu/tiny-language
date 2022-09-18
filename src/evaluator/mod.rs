@@ -1,9 +1,9 @@
-use crate::ast::{BlockStatement, CallExpression, Expression, ExpressionStatement, FunctionLiteral, Identifier, IfExpression, InfixExpression, LetStatement, Node, PrefixExpression, Program, ReturnStatement, Statement};
+use crate::ast::{ArrayIndex, ArrayLiteral, BlockStatement, CallExpression, Expression, ExpressionStatement, FunctionLiteral, Identifier, IfExpression, InfixExpression, LetStatement, Node, PrefixExpression, Program, ReturnStatement, Statement};
 use crate::evaluator::environment::Environment;
-use crate::evaluator::object::{Function, NullValue, Value, WrappedValue};
+use crate::evaluator::object::{BuiltinFunction, Function, NullValue, Value, WrappedValue};
 use crate::lexer::token::Token;
 use anyhow::{format_err, Result};
-use crate::evaluator::builtins::BuiltinFunction;
+use crate::evaluator::builtins::{Builtins};
 
 pub mod object;
 pub mod environment;
@@ -65,7 +65,8 @@ fn eval_expression(expr: &Expression, env: &Environment) -> Result<Value> {
         Expression::IfExpr(expr) => eval_if_expression(expr, env)?,
         Expression::FuncExpr(expr) => eval_func_literal(expr, env)?,
         Expression::CallExpr(expr) => eval_call_function(expr, env)?,
-        Expression::ArrayExpr(_) => Value::from(NullValue),
+        Expression::ArrayExpr(expr) => eval_array_literal(expr, env)?,
+        Expression::ArrayIndex(expr) => eval_array_index(expr, env)?,
     };
     Ok(val)
 }
@@ -183,8 +184,12 @@ fn eval_call_function(expr: &CallExpression, env: &Environment) -> Result<Value>
 
 
 fn eval_builtin_func(func: &BuiltinFunction, args: &Vec<Box<Expression>>, env: &Environment) -> Result<Value> {
-    let actual_args = eval_func_actual_arguments(args, env)?;
-    func.execute(&actual_args)
+    if let Some(builtin_func) = Builtins::lookup(&func.0) {
+        let actual_args = eval_func_actual_arguments(args, env)?;
+        builtin_func.execute(&actual_args)
+    } else {
+        Err(format_err!("{} is not a function", func.0))
+    }
 }
 
 fn eval_apply_func(func: &Function, args: &Vec<Box<Expression>>, env: &Environment) -> Result<Value> {
@@ -205,8 +210,6 @@ fn eval_apply_func(func: &Function, args: &Vec<Box<Expression>>, env: &Environme
     eval_block_statement(&func.body, &inner_env)
 }
 
-//todo:
-// 用于计算参数的实际值
 fn eval_func_actual_arguments(exprs: &Vec<Box<Expression>>, env: &Environment) -> Result<Vec<Value>> {
     let mut result = vec![];
     for expr in exprs.iter().map(|e| e.as_ref()) {
@@ -214,6 +217,29 @@ fn eval_func_actual_arguments(exprs: &Vec<Box<Expression>>, env: &Environment) -
         result.push(val);
     }
     Ok(result)
+}
+
+fn eval_array_literal(expr: &ArrayLiteral, env: &Environment) -> Result<Value> {
+    let mut values = vec![];
+    for e in &expr.elements {
+        match eval_expression(e.as_ref(), env) {
+            Ok(v) => values.push(v),
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(Value::from(values))
+}
+
+fn eval_array_index(expr: &ArrayIndex, env: &Environment) -> Result<Value> {
+    let arr = eval_expression(expr.name.as_ref(), env)?;
+    let values = Vec::try_from(&arr)?;
+
+    let index = eval_expression(expr.index.as_ref(), env)?;
+    let index = i64::try_from(&index)?;
+    if index + 1 > values.len() as i64 || index < 0 {
+        return Err(format_err!("index `{}` out of bound `{}`", index, values.len()));
+    }
+    Ok(values[index.abs() as usize].clone())
 }
 
 #[cfg(test)]
@@ -330,7 +356,7 @@ mod tests {
 
     #[test]
     fn test_return_statements() {
-        let mut v10 =Value::from(10);
+        let mut v10 = Value::from(10);
         v10.set_return();
         let mut v20 = Value::from(20);
         v20.set_return();
@@ -380,7 +406,7 @@ mod tests {
             ("foobar", "identifier not found: foobar"),
             ("len(1)", "argument to `len` not supported, got INTEGER"),
             ("len(\"one\", \"two\")", "wrong number of arguments. got=2, want=1"),
-
+            ("[1,2,3][4]", "index `4` out of bound `3`"),
         ];
         for (no, case) in cases.iter().enumerate() {
             let mut parser = Parser::from_string(case.0);
@@ -391,7 +417,6 @@ mod tests {
             let err_message = result.err().unwrap().to_string();
             assert_eq!(&err_message, case.1, "{}: actual is {:?}, expected is {:?}", no, &err_message, case.1);
         }
-
     }
 
 
@@ -453,12 +478,48 @@ mod tests {
     }
 
     #[test]
-    fn test_builtin_function(){
+    fn test_builtin_function() {
         let cases = vec![
             ("len(\"\")", Value::from(0)),
             ("let s = \"\"; len(s);", Value::from(0)),
             ("len(\"four\")", Value::from(4)),
             ("len(\"hello world\")", Value::from(11)),
+        ];
+        run_cases(&cases);
+    }
+
+    #[test]
+    fn test_array_literal() {
+        let cases = vec![
+            ("let a = 100;[1, 1+2, 4>3, a]", Value::from(vec![
+                Value::from(1), Value::from(3), Value::from(true), Value::from(100),
+            ])),
+            ("[]", Value::from(vec![])),
+        ];
+        run_cases(&cases);
+    }
+
+    #[test]
+    fn test_array_index() {
+        let cases = vec![
+            ("[1,2,3][0]", Value::from(1)),
+            ("[1,2,3][1+1]", Value::from(3)),
+            ("let i = 0; [1][i]", Value::from(1)),
+            ("let myArray=[1,2,3];myArray[2]", Value::from(3)),
+            ("let myArray=[1,2,3];myArray[0]+myArray[1]+myArray[2]", Value::from(6)),
+            ("let myArray=[1,2,3];let i=myArray[0];myArray[i]", Value::from(2)),
+        ];
+        run_cases(&cases);
+    }
+
+    #[test]
+    fn test_array_len() {
+        let cases = vec![
+            ("len([])", Value::from(0)),
+            ("len([1,2,3])", Value::from(3)),
+            ("let i = len([1,2,3]) + 1; i", Value::from(4)),
+            ("let a = [1,2,3];len(a)", Value::from(3)),
+            ("let a = [1,2,4];a[len(a)-1]", Value::from(4)),
         ];
         run_cases(&cases);
     }

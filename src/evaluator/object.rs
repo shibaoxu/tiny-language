@@ -1,6 +1,5 @@
 use std::fmt::{Display, Formatter};
 use crate::ast::{BlockStatement, Expression};
-use crate::evaluator::builtins::BuiltinFunction;
 use anyhow::{Result, Error, format_err};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -11,6 +10,7 @@ pub enum ObjectType {
     Null,
     Fun,
     Builtin,
+    Array,
 }
 
 impl Display for ObjectType {
@@ -22,6 +22,7 @@ impl Display for ObjectType {
             ObjectType::Null => "NULL",
             ObjectType::Fun => "FUNCTION",
             ObjectType::Builtin => "BUILTIN",
+            ObjectType::Array => "ARRAY",
         };
         f.write_str(s)
     }
@@ -35,10 +36,10 @@ pub enum WrappedValue {
     NullValue(NullValue),
     FunValue(Function),
     BuiltinValue(BuiltinFunction),
+    ArrayValue(Vec<Value>),
 }
 
-
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct NullValue;
 
 impl Display for NullValue {
@@ -56,7 +57,18 @@ pub struct Function {
 
 impl Display for Function {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str("FUN")
+        let arguments = self.parameters.iter().map(|e| e.to_string()).collect::<Vec<_>>().join(",");
+        let body = self.body.statements.iter().map(|e| e.to_string()).collect::<String>();
+        f.write_str(&format!("fn({}){{{}}}", arguments, body))
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BuiltinFunction(pub String);
+
+impl Display for BuiltinFunction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
     }
 }
 
@@ -78,12 +90,12 @@ impl Value {
             WrappedValue::BoolValue(v) => format!("{}", v),
             WrappedValue::StrValue(v) => format!("{}", v),
             WrappedValue::NullValue(v) => format!("{}", v),
-            WrappedValue::FunValue(v) => {
-                let arguments = v.parameters.iter().map(|e| e.to_string()).collect::<Vec<_>>().join(",");
-                let body = v.body.statements.iter().map(|e|e.to_string()).collect::<String>();
-                format!("fn({}){{{}}}", arguments, body)
-            },
+            WrappedValue::FunValue(v) => format!("{}", v),
             WrappedValue::BuiltinValue(v) => format!("{}", v),
+            WrappedValue::ArrayValue(v) => {
+                let s = v.iter().map(|e| e.inspect()).collect::<Vec<_>>().join(",");
+                format!("[{}]", s)
+            }
         }
     }
 
@@ -129,6 +141,12 @@ impl From<Function> for Value {
 impl From<BuiltinFunction> for Value {
     fn from(v: BuiltinFunction) -> Self {
         Self { value: WrappedValue::BuiltinValue(v), is_return: false, type_of: ObjectType::Builtin }
+    }
+}
+
+impl From<Vec<Value>> for Value {
+    fn from(v: Vec<Value>) -> Self {
+        Self { value: WrappedValue::ArrayValue(v), is_return: false, type_of: ObjectType::Array }
     }
 }
 
@@ -200,6 +218,18 @@ impl TryFrom<&Value> for BuiltinFunction {
             Ok(v)
         } else {
             Err(format_err!("can not convert `{:?}` to `BuiltinFunction`", value))
+        }
+    }
+}
+
+impl TryFrom<&Value> for Vec<Value> {
+    type Error = Error;
+
+    fn try_from(value: &Value) -> std::result::Result<Self, Self::Error> {
+        if let WrappedValue::ArrayValue(v) = value.value.clone() {
+            Ok(v)
+        } else {
+            Err(format_err!("can not convert `{:?}` to `Array`", value))
         }
     }
 }

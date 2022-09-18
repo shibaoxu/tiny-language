@@ -45,6 +45,7 @@ enum Precedence {
     Prefix,
     //-,!
     Call,//fn
+    Index, //arr[index]
 }
 
 pub struct Parser<T: BufRead + Seek> {
@@ -81,6 +82,7 @@ impl<T: BufRead + Seek> Parser<T> {
                 (Token::Slash, Precedence::Product),
                 (Token::Asterisk, Precedence::Product),
                 (Token::LParen, Precedence::Call),
+                (Token::LBracket, Precedence::Index),
             ]),
             prefix_parse_fns: HashMap::new(),
             infix_parse_fns: HashMap::new(),
@@ -111,6 +113,7 @@ impl<T: BufRead + Seek> Parser<T> {
         self.register_infix(Token::LT, Self::parse_infix_expression);
         self.register_infix(Token::GT, Self::parse_infix_expression);
         self.register_infix(Token::LParen, Self::parse_call_expression);
+        self.register_infix(Token::LBracket, Self::parse_array_index);
     }
 
     pub fn parse(&mut self) -> Result<Program> {
@@ -342,6 +345,23 @@ impl<T: BufRead + Seek> Parser<T> {
             .into_iter()
             .map(|e| Box::new(e)).collect::<Vec<_>>();
         Ok(Expression::ArrayExpr(ArrayLiteral { token, elements }))
+    }
+
+    fn parse_array_index(&mut self, name: Expression) -> Result<Expression> {
+        let token = self.cur_token.clone();
+        self.next_token();
+
+        let index = self.parse_expression(Precedence::Lowest)?;
+        self.expected_peek(Token::RBracket)?;
+        Ok(
+            Expression::ArrayIndex(
+                ArrayIndex {
+                    token,
+                    name: Box::new(name),
+                    index: Box::new(index),
+                }
+            )
+        )
     }
 
     fn expected_peek(&mut self, expected_token: Token) -> Result<()> {
@@ -578,6 +598,9 @@ mod tests {
             ("a + add(b * c) + d", "((a + add((b * c))) + d)", ),
             ("add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))", "add(a,b,1,(2 * 3),(4 + 5),add(6,(7 * 8)))", ),
             ("add(a + b + c * d / f + g)", "add((((a + b) + ((c * d) / f)) + g))", ),
+            ("a * [1, 2, 3, 4][b * c] * d", "((a * ([1,2,3,4][(b * c)])) * d)"),
+            ("add(a * b[2], b[1], 2 * [1, 2][1])", "add((a * (b[2])),(b[1]),(2 * ([1,2][1])))"),
+
         ];
         run_cases(&cases);
     }
@@ -590,6 +613,13 @@ mod tests {
         run_cases(&cases);
     }
 
+    #[test]
+    fn test_array_index(){
+        let cases = vec![
+            ("myArray[1+1]", "(myArray[(1 + 1)])")
+        ];
+        run_cases(&cases);
+    }
     fn run_cases(cases: &Vec<(&str, &str)>) {
         tracing_subscriber::fmt().try_init().unwrap_or(());
         for (no, case) in cases.iter().enumerate() {
