@@ -404,9 +404,12 @@ mod tests {
                 return 1;
              }", "unknown operator: BOOLEAN + BOOLEAN"),
             ("foobar", "identifier not found: foobar"),
-            ("len(1)", "argument to `len` not supported, got INTEGER"),
-            ("len(\"one\", \"two\")", "wrong number of arguments. got=2, want=1"),
+            ("len(1)", "argument to `len` not supported, got `INTEGER`"),
+            ("len(\"one\", \"two\")", "wrong number of arguments. got=`2`, want=`1`"),
             ("[1,2,3][4]", "index `4` out of bound `3`"),
+            ("first([])", "index `0` out of bound `0`"),
+            ("first([], 1)", "wrong number of arguments. got=`2`, want=`1`"),
+            ("first(1)", "mismatch type. got=`INTEGER`, want=`ARRAY`"),
         ];
         for (no, case) in cases.iter().enumerate() {
             let mut parser = Parser::from_string(case.0);
@@ -484,6 +487,8 @@ mod tests {
             ("let s = \"\"; len(s);", Value::from(0)),
             ("len(\"four\")", Value::from(4)),
             ("len(\"hello world\")", Value::from(11)),
+            ("first([3,2,1])", Value::from(3)),
+            ("first([true,1])", Value::from(true)),
         ];
         run_cases(&cases);
     }
