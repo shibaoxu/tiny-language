@@ -427,7 +427,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn test_let_statements() {
         let cases = vec![
@@ -558,7 +557,31 @@ mod tests {
         let mut env = Environment::new();
         let result = eval(&program, &mut env).unwrap();
         let result = Vec::try_from(&result).unwrap();
-        // println!("{:?}", result);
         assert_eq!(result, vec![Value::from(2), Value::from(4), Value::from(6), Value::from(8)]);
+    }
+
+    #[test]
+    fn test_reduce_on_array(){
+        let mut parser = Parser::from_string("\
+            let reduce = fn(arr, initial, f) {\
+                let iter = fn(arr, result) {\
+                    if (len(arr) == 0) {\
+                        result\
+                    } else {\
+                        iter(rest(arr), f(result, first(arr)));\
+                    }\
+                };\
+                iter(arr, initial);\
+            };\
+            let sum = fn(arr) {\
+                reduce(arr, 0, fn(initial, el) { initial + el});\
+            };\
+            \
+            sum([1,2,3,4,5]);");
+
+        let program = parser.parse().unwrap();
+        let mut env = Environment::new();
+        let result = eval(&program, &mut env).unwrap();
+        assert_eq!(result, Value::from(15));
     }
 }
