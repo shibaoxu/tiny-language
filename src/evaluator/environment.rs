@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::evaluator::builtins::Builtins;
+use crate::evaluator::builtin::Builtins;
 use crate::evaluator::object::{BuiltinFunction, Value};
 
 #[derive(Debug, Clone)]

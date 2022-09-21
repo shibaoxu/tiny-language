@@ -1,7 +1,7 @@
 use std::io::{BufRead, Write};
 use crate::evaluator::environment::Environment;
 use crate::evaluator::eval;
-use crate::parser::{Parser};
+use crate::parser::Parser;
 
 
 
@@ -21,21 +21,25 @@ pub fn start<I, O>(input: &mut I, output: &mut O)
         input.read_line(&mut buf).unwrap();
 
         let mut parser = Parser::from_string(&buf);
-        let program = parser.parse().unwrap();
-        // if parser.errors.len() != 0 {
-        //     print_parser_errors(&parser.errors, output);
-        //     continue;
-        // }
+        let program = parser.parse();
+        let program = match program{
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("{}", e);
+                continue;
+            }
+        };
 
-        let result = eval(&program, &mut env).unwrap();
-        output.write(result.inspect().as_bytes()).unwrap();
-        output.write(b"\n").unwrap();
+        match eval(&program, &mut env){
+            Ok(v) => {
+                output.write(v.inspect().as_bytes()).unwrap();
+                output.write(b"\n").unwrap();
+            }
+            Err(e) => {
+                output.write(e.to_string().as_bytes()).unwrap();
+                output.write(b"\n").unwrap();
+            }
+        }
         output.flush().unwrap();
     }
 }
-
-// fn print_parser_errors(errors: &Vec<ParsingError>, output: &mut impl Write) {
-//     for e in errors.iter(){
-//         output.write_fmt(format_args!("{:?}\n", e.to_string())).unwrap()
-//     }
-// }

@@ -3,11 +3,11 @@ use crate::evaluator::environment::Environment;
 use crate::evaluator::object::{BuiltinFunction, Function, NullValue, Value, WrappedValue};
 use crate::lexer::token::Token;
 use anyhow::{format_err, Result};
-use crate::evaluator::builtins::{Builtins};
+use crate::evaluator::builtin::Builtins;
 
 pub mod object;
 pub mod environment;
-mod builtins;
+mod builtin;
 
 pub fn eval(program: &Program, env: &mut Environment) -> Result<Value> {
     eval_statements(&program.statements, env)
@@ -244,6 +244,8 @@ fn eval_array_index(expr: &ArrayIndex, env: &Environment) -> Result<Value> {
 
 #[cfg(test)]
 mod tests {
+    use std::fs::File;
+    use std::io::BufReader;
     use crate::evaluator::environment::Environment;
     use crate::evaluator::eval;
     use crate::evaluator::object::{NullValue, Value};
@@ -404,12 +406,15 @@ mod tests {
                 return 1;
              }", "unknown operator: BOOLEAN + BOOLEAN"),
             ("foobar", "identifier not found: foobar"),
-            ("len(1)", "argument to `len` not supported, got `INTEGER`"),
-            ("len(\"one\", \"two\")", "wrong number of arguments. got=`2`, want=`1`"),
+            ("len(1)", "[builtin/len]: mismatch type. got=`INTEGER`, want=`ARRAY` or `STRING`"),
+            ("len(\"one\", \"two\")", "[builtin/len]: wrong number of arguments. got=`2`, want=`1`"),
             ("[1,2,3][4]", "index `4` out of bound `3`"),
             ("first([])", "index `0` out of bound `0`"),
-            ("first([], 1)", "wrong number of arguments. got=`2`, want=`1`"),
-            ("first(1)", "mismatch type. got=`INTEGER`, want=`ARRAY`"),
+            ("first([], 1)", "[builtin/first]: wrong number of arguments. got=`2`, want=`1`"),
+            ("first(1)", "[builtin/first]: mismatch type. got=`INTEGER`, want=`ARRAY`"),
+            ("rest([])", "[builtin/rest]: len of arg must greater than `1`"),
+            ("push([])", "[builtin/push]: wrong number of arguments. got=`1`, want=`2`"),
+            ("push(1, 1)", "[builtin/push]: mismatch type. got=`INTEGER`, want=`ARRAY`"),
         ];
         for (no, case) in cases.iter().enumerate() {
             let mut parser = Parser::from_string(case.0);
@@ -489,6 +494,12 @@ mod tests {
             ("len(\"hello world\")", Value::from(11)),
             ("first([3,2,1])", Value::from(3)),
             ("first([true,1])", Value::from(true)),
+            ("last([3,2,1])", Value::from(1)),
+            ("last([true,1, false])", Value::from(false)),
+            ("rest([1,2,3])", Value::from(vec![Value::from(2), Value::from(3)])),
+            ("rest([1])", Value::from(vec![])),
+            ("push([], 1)", Value::from(vec![Value::from(1)])),
+            ("push([1], 2)", Value::from(vec![Value::from(1), Value::from(2)])),
         ];
         run_cases(&cases);
     }
@@ -538,5 +549,16 @@ mod tests {
             let result = eval(&program, &mut env).unwrap();
             assert_eq!(result, case.1, "{}: actual is {:?}, expected is {:?}", no, result, case.1);
         }
+    }
+
+    #[test]
+    fn test_map_on_array(){
+        let mut parser = Parser::from_buf_reader(BufReader::new(File::open("map_code").unwrap()));
+        let program = parser.parse().unwrap();
+        let mut env = Environment::new();
+        let result = eval(&program, &mut env).unwrap();
+        let result = Vec::try_from(&result).unwrap();
+        // println!("{:?}", result);
+        assert_eq!(result, vec![Value::from(2), Value::from(4), Value::from(6), Value::from(8)]);
     }
 }
