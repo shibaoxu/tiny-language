@@ -1,4 +1,5 @@
-use crate::ast::{ArrayIndex, ArrayLiteral, BlockStatement, CallExpression, Expression, ExpressionStatement, FunctionLiteral, Identifier, IfExpression, InfixExpression, LetStatement, Node, PrefixExpression, Program, ReturnStatement, Statement};
+use std::collections::BTreeMap;
+use crate::ast::{ArrayIndex, ArrayLiteral, BlockStatement, CallExpression, Expression, ExpressionStatement, FunctionLiteral, HashmapLiteral, Identifier, IfExpression, InfixExpression, LetStatement, Node, PrefixExpression, Program, ReturnStatement, Statement};
 use crate::evaluator::environment::Environment;
 use crate::evaluator::object::{BuiltinFunction, Function, NullValue, Value, WrappedValue};
 use crate::lexer::token::Token;
@@ -67,6 +68,7 @@ fn eval_expression(expr: &Expression, env: &Environment) -> Result<Value> {
         Expression::CallExpr(expr) => eval_call_function(expr, env)?,
         Expression::ArrayExpr(expr) => eval_array_literal(expr, env)?,
         Expression::ArrayIndex(expr) => eval_array_index(expr, env)?,
+        Expression::HashMapExpr(expr) => eval_hashmap_literal(expr, env)?,
     };
     Ok(val)
 }
@@ -242,8 +244,20 @@ fn eval_array_index(expr: &ArrayIndex, env: &Environment) -> Result<Value> {
     Ok(values[index.abs() as usize].clone())
 }
 
+fn eval_hashmap_literal(expr: &HashmapLiteral, env: &Environment) -> Result<Value> {
+    let mut v = BTreeMap::new();
+    for pair in &expr.pairs {
+        let key = eval_expression(&pair.0, env)?;
+        let value = eval_expression(&pair.1, env)?;
+        v.insert(key, value);
+    }
+
+    Ok(Value::from(v))
+}
+
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
     use std::fs::File;
     use std::io::BufReader;
     use crate::evaluator::environment::Environment;
@@ -551,7 +565,7 @@ mod tests {
     }
 
     #[test]
-    fn test_map_on_array(){
+    fn test_map_on_array() {
         let mut parser = Parser::from_buf_reader(BufReader::new(File::open("map_code").unwrap()));
         let program = parser.parse().unwrap();
         let mut env = Environment::new();
@@ -561,7 +575,7 @@ mod tests {
     }
 
     #[test]
-    fn test_reduce_on_array(){
+    fn test_reduce_on_array() {
         let mut parser = Parser::from_string("\
             let reduce = fn(arr, initial, f) {\
                 let iter = fn(arr, result) {\
@@ -583,5 +597,26 @@ mod tests {
         let mut env = Environment::new();
         let result = eval(&program, &mut env).unwrap();
         assert_eq!(result, Value::from(15));
+    }
+
+    #[test]
+    fn test_hashmap() {
+        let cases = vec![
+            ("{1:1}", Value::from(BTreeMap::from([(Value::from(1), Value::from(1))]))),
+            ("{1:1}", Value::from(BTreeMap::from(
+                [(Value::from(1), Value::from(1))]
+            ))),
+            ("{true:false}", Value::from(BTreeMap::from(
+                [(Value::from(true), Value::from(false))]
+            ))),
+            ("{\"name\": \"monkey\", \"age\": 10+10}", Value::from(BTreeMap::from(
+                [(Value::from("name"), Value::from("monkey")),
+                    (Value::from("age"), Value::from(20))],
+            ))),
+            ("{\"my\" + \"age\" :10+10}", Value::from(BTreeMap::from(
+                [(Value::from("myage"), Value::from(20))]
+            ))),
+        ];
+        run_cases(&cases);
     }
 }

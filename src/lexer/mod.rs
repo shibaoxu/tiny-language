@@ -67,6 +67,7 @@ impl<T: BufRead + Seek> Lexer<T> {
                                         '[' => Token::LBracket,
                                         ']' => Token::RBracket,
                                         ',' => Token::Comma,
+                                        ':' => Token::Colon,
                                         _ => Token::Illegal(c.to_string()),
                                     }
                                 }
@@ -222,6 +223,7 @@ mod tests {
         \"foobar\" \
         \"foo bar\" \
         [foo, 10] \
+        {\"foo\": \"bar\"} \
         ";
 
         let outputs = vec![
@@ -243,6 +245,7 @@ mod tests {
             Token::String("foobar".to_string()),
             Token::String("foo bar".to_string()),
             Token::LBracket, Token::Identity("foo".to_string()), Token::Comma, Token::Int(10), Token::RBracket,
+            Token::LBrace, Token::String("foo".to_string()),Token::Colon, Token::String("bar".to_string()), Token::RBrace,
             Token::EOF,
         ];
 

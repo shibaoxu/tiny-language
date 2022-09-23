@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Ord, PartialOrd)]
 pub enum Token {
     Illegal(String),
     EOF,
@@ -33,6 +33,7 @@ pub enum Token {
     RBrace,
     LBracket,
     RBracket,
+    Colon,
 
     // keywords
     Function,
@@ -58,7 +59,7 @@ impl Token {
         }
     }
 
-    pub fn to_placeholder(&self) -> Self{
+    pub fn to_placeholder(&self) -> Self {
         match self {
             Token::Illegal(_) => Token::illegal_placeholder(),
             Token::Identity(_) => Token::identify_placeholder(),
@@ -92,7 +93,7 @@ impl Display for Token {
             Token::EOF => "eof".into(),
             Token::Identity(v) => format!("{}", v),
             Token::Int(v) => format!("{}", v),
-            Token::String(v) => format!("{}", v),
+            Token::String(v) => format!("\"{}\"", v),
             Token::Assign => "=".into(),
             Token::Plus => "+".into(),
             Token::Minus => "-".into(),
@@ -111,6 +112,7 @@ impl Display for Token {
             Token::RParen => ")".into(),
             Token::LBrace => "{".into(),
             Token::RBrace => "}".into(),
+            Token::Colon => ":".into(),
             Token::Function => "fn".into(),
             Token::Let => "let".into(),
             Token::True => "true".into(),

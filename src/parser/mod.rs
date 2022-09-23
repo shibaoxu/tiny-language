@@ -10,7 +10,7 @@ use tracing::{error, info};
 use crate::ast::*;
 use crate::ast::Expression::BoolExpr;
 use crate::lexer::token::Token;
-use crate::parser::ParsingError::{NoInfixParseFun, NoPrefixParseFun};
+use crate::parser::ParsingError::{NoInfixParseFun, NoPrefixParseFun, WrongHashmapSyntax};
 
 #[derive(Error, Debug, Clone)]
 pub enum ParsingError {
@@ -29,6 +29,8 @@ pub enum ParsingError {
     ExpectValidExpression,
     #[error("{0}")]
     UnknownError(String),
+    #[error("wrong hashmap syntax")]
+    WrongHashmapSyntax,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -44,7 +46,8 @@ enum Precedence {
     //*
     Prefix,
     //-,!
-    Call,//fn
+    Call,
+    //fn
     Index, //arr[index]
 }
 
@@ -101,6 +104,7 @@ impl<T: BufRead + Seek> Parser<T> {
         self.register_prefix(Token::False, Self::parse_boolean_literal);
         self.register_prefix(Token::LParen, Self::parse_grouped_expression);
         self.register_prefix(Token::LBracket, Self::parse_array_literal);
+        self.register_prefix(Token::LBrace, Self::parse_hashmap_literal);
         self.register_prefix(Token::If, Self::parse_if_expression);
         self.register_prefix(Token::Function, Self::parse_function_literal);
 
@@ -207,11 +211,15 @@ impl<T: BufRead + Seek> Parser<T> {
     }
 
     fn parse_string_literal(&mut self) -> Result<Expression> {
-        Ok(
-            Expression::StrExpr(
-                StringLiteral { token: self.cur_token.clone(), value: self.cur_token.to_string() }
+        if let Token::String(value) = &self.cur_token{
+            Ok(
+                Expression::StrExpr(
+                    StringLiteral { token: self.cur_token.clone(), value: value.clone()}
+                )
             )
-        )
+        }else{
+            panic!("found a invalid int token {:?}", self.cur_token);
+        }
     }
 
     fn parse_boolean_literal(&mut self) -> Result<Expression> {
@@ -347,7 +355,7 @@ impl<T: BufRead + Seek> Parser<T> {
         Ok(Expression::ArrayExpr(ArrayLiteral { token, elements }))
     }
 
-    fn parse_array_index(&mut self, name: Expression) -> Result<Expression> {
+    fn parse_array_index(&mut self, expr: Expression) -> Result<Expression> {
         let token = self.cur_token.clone();
         self.next_token();
 
@@ -357,11 +365,35 @@ impl<T: BufRead + Seek> Parser<T> {
             Expression::ArrayIndex(
                 ArrayIndex {
                     token,
-                    name: Box::new(name),
+                    name: Box::new(expr),
                     index: Box::new(index),
                 }
             )
         )
+    }
+
+    fn parse_hashmap_literal(&mut self) -> Result<Expression> {
+        let token = self.cur_token.clone();
+        let mut pairs = vec![];
+        while !self.peek_token_is(Token::RBrace) {
+            self.next_token();
+            let key = self.parse_expression(Precedence::Lowest)?;
+            self.expected_peek(Token::Colon)?;
+            self.next_token();
+            let value = self.parse_expression(Precedence::Lowest)?;
+            pairs.push((key, value));
+
+            match self.peek_token {
+                Token::Comma => self.next_token(),
+                Token::RBrace => {}
+                _ => return Err(WrongHashmapSyntax.into())
+            }
+        }
+        self.expected_peek(Token::RBrace)?;
+        Ok(Expression::HashMapExpr(HashmapLiteral {
+            token,
+            pairs,
+        }))
     }
 
     fn expected_peek(&mut self, expected_token: Token) -> Result<()> {
@@ -475,8 +507,8 @@ mod tests {
     #[test]
     fn test_parsing_string_literal() {
         let cases = vec![
-            ("\"foo\"", "foo"),
-            ("\"foo 'bar\"", "foo 'bar"),
+            ("\"f\"", "\"f\""),
+            ("\"foo 'bar\"", "\"foo 'bar\""),
         ];
         run_cases(&cases);
     }
@@ -600,7 +632,14 @@ mod tests {
             ("add(a + b + c * d / f + g)", "add((((a + b) + ((c * d) / f)) + g))", ),
             ("a * [1, 2, 3, 4][b * c] * d", "((a * ([1,2,3,4][(b * c)])) * d)"),
             ("add(a * b[2], b[1], 2 * [1, 2][1])", "add((a * (b[2])),(b[1]),(2 * ([1,2][1])))"),
+        ];
+        run_cases(&cases);
+    }
 
+    #[test]
+    fn test_hashmap_literal(){
+        let cases = vec![
+            ("{1+1: 2, true: 1, \"foo\": \"bar\"}", "{(1 + 1) : 2,true : 1,\"foo\" : \"bar\"}"),
         ];
         run_cases(&cases);
     }
@@ -614,12 +653,13 @@ mod tests {
     }
 
     #[test]
-    fn test_array_index(){
+    fn test_array_index() {
         let cases = vec![
             ("myArray[1+1]", "(myArray[(1 + 1)])")
         ];
         run_cases(&cases);
     }
+
     fn run_cases(cases: &Vec<(&str, &str)>) {
         tracing_subscriber::fmt().try_init().unwrap_or(());
         for (no, case) in cases.iter().enumerate() {
