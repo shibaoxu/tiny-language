@@ -4,7 +4,7 @@ use anyhow::{format_err, Result};
 use crate::evaluator::builtin::array::{First, Last, Len, Push, Rest};
 
 mod array;
-mod string;
+mod io;
 
 pub trait Builtin: Debug + Display {
     fn name(&self) -> String {

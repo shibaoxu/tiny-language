@@ -362,8 +362,8 @@ impl<T: BufRead + Seek> Parser<T> {
         let index = self.parse_expression(Precedence::Lowest)?;
         self.expected_peek(Token::RBracket)?;
         Ok(
-            Expression::ArrayIndex(
-                ArrayIndex {
+            Expression::IndexExpr(
+                IndexExpression {
                     token,
                     name: Box::new(expr),
                     index: Box::new(index),

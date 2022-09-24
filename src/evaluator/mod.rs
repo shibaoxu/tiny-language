@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
-use crate::ast::{ArrayIndex, ArrayLiteral, BlockStatement, CallExpression, Expression, ExpressionStatement, FunctionLiteral, HashmapLiteral, Identifier, IfExpression, InfixExpression, LetStatement, Node, PrefixExpression, Program, ReturnStatement, Statement};
+use crate::ast::{IndexExpression, ArrayLiteral, BlockStatement, CallExpression, Expression, ExpressionStatement, FunctionLiteral, HashmapLiteral, Identifier, IfExpression, InfixExpression, LetStatement, Node, PrefixExpression, Program, ReturnStatement, Statement};
 use crate::evaluator::environment::Environment;
-use crate::evaluator::object::{BuiltinFunction, Function, NullValue, Value, WrappedValue};
+use crate::evaluator::object::{BuiltinFunction, Function, NullValue, ObjectType, Value, WrappedValue};
 use crate::lexer::token::Token;
 use anyhow::{format_err, Result};
 use crate::evaluator::builtin::Builtins;
@@ -67,7 +67,7 @@ fn eval_expression(expr: &Expression, env: &Environment) -> Result<Value> {
         Expression::FuncExpr(expr) => eval_func_literal(expr, env)?,
         Expression::CallExpr(expr) => eval_call_function(expr, env)?,
         Expression::ArrayExpr(expr) => eval_array_literal(expr, env)?,
-        Expression::ArrayIndex(expr) => eval_array_index(expr, env)?,
+        Expression::IndexExpr(expr) => eval_index(expr, env)?,
         Expression::HashMapExpr(expr) => eval_hashmap_literal(expr, env)?,
     };
     Ok(val)
@@ -232,16 +232,31 @@ fn eval_array_literal(expr: &ArrayLiteral, env: &Environment) -> Result<Value> {
     Ok(Value::from(values))
 }
 
-fn eval_array_index(expr: &ArrayIndex, env: &Environment) -> Result<Value> {
-    let arr = eval_expression(expr.name.as_ref(), env)?;
-    let values = Vec::try_from(&arr)?;
+fn eval_index(expr: &IndexExpression, env: &Environment) -> Result<Value> {
+    let obj = eval_expression(expr.name.as_ref(), env)?;
 
     let index = eval_expression(expr.index.as_ref(), env)?;
-    let index = i64::try_from(&index)?;
-    if index + 1 > values.len() as i64 || index < 0 {
-        return Err(format_err!("index `{}` out of bound `{}`", index, values.len()));
-    }
-    Ok(values[index.abs() as usize].clone())
+    let result = match obj.type_of{
+        ObjectType::Array => {
+            let values = Vec::try_from(&obj)?;
+            let index = i64::try_from(&index)?;
+            if index + 1 > values.len() as i64 || index < 0 {
+                return Err(format_err!("index `{}` out of bound `{}`", index, values.len()));
+            }
+            values[index.abs() as usize].clone()
+        }
+        ObjectType::Hashmap => {
+            let values = BTreeMap::try_from(&obj)?;
+            if let Some(v) = values.get(&index){
+                v.clone()
+            }else{
+                Value::from(NullValue)
+            }
+        }
+        _ => return Err(format_err!("`index` expected `ARRAY` or `HASHMAP`, got `{}`", obj.type_of)),
+    };
+
+    Ok(result)
 }
 
 fn eval_hashmap_literal(expr: &HashmapLiteral, env: &Environment) -> Result<Value> {
@@ -429,6 +444,7 @@ mod tests {
             ("rest([])", "[builtin/rest]: len of arg must greater than `1`"),
             ("push([])", "[builtin/push]: wrong number of arguments. got=`1`, want=`2`"),
             ("push(1, 1)", "[builtin/push]: mismatch type. got=`INTEGER`, want=`ARRAY`"),
+            ("true[1]", "`index` expected `ARRAY` or `HASHMAP`, got `BOOLEAN`"),
         ];
         for (no, case) in cases.iter().enumerate() {
             let mut parser = Parser::from_string(case.0);
@@ -618,5 +634,15 @@ mod tests {
             ))),
         ];
         run_cases(&cases);
+    }
+
+    #[test]
+    fn test_hashmap_index(){
+        let cases = vec![
+            ("{\"name\": \"monkey\", \"age\": 10}[\"name\"]", Value::from("monkey")),
+            ("{\"name\": \"monkey\", \"age\": 10}[\"age\"]", Value::from(10)),
+            ("{\"name\": \"monkey\", \"age\": 10}[\"birthday\"]", Value::from(NullValue)),
+        ];
+        run_cases(&cases)
     }
 }

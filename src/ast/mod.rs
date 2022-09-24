@@ -40,7 +40,7 @@ pub enum Expression {
     FuncExpr(FunctionLiteral),
     CallExpr(CallExpression),
     ArrayExpr(ArrayLiteral),
-    ArrayIndex(ArrayIndex),
+    IndexExpr(IndexExpression),
     HashMapExpr(HashmapLiteral),
 }
 
@@ -57,7 +57,7 @@ impl Display for Expression {
             Expression::FuncExpr(expr) => f.write_str(&expr.token_literal()),
             Expression::CallExpr(expr) => f.write_str(&expr.token_literal()),
             Expression::ArrayExpr(expr) => f.write_str(&expr.token_literal()),
-            Expression::ArrayIndex(expr) => f.write_str(&expr.token_literal()),
+            Expression::IndexExpr(expr) => f.write_str(&expr.token_literal()),
             Expression::HashMapExpr(expr) => f.write_str(&expr.token_literal()),
         }
     }
@@ -306,19 +306,19 @@ impl Display for ArrayLiteral {
 impl Node for ArrayLiteral {}
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
-pub struct ArrayIndex {
+pub struct IndexExpression {
     pub token: Token,
     pub name: Box<Expression>,
     pub index: Box<Expression>,
 }
 
-impl Display for ArrayIndex {
+impl Display for IndexExpression {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(&format!("({}[{}])", self.name, self.index))
     }
 }
 
-impl Node for ArrayIndex {}
+impl Node for IndexExpression {}
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct HashmapLiteral {
