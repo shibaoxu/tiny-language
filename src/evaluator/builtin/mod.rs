@@ -2,6 +2,7 @@ use std::fmt::{Debug, Display};
 use crate::evaluator::object::{ObjectType, Value};
 use anyhow::{format_err, Result};
 use crate::evaluator::builtin::array::{First, Last, Len, Push, Rest};
+use crate::evaluator::builtin::io::Put;
 
 mod array;
 mod io;
@@ -23,6 +24,7 @@ impl Builtins {
             "first" => Some(Box::new(First)),
             "last" => Some(Box::new(Last)),
             "rest" => Some(Box::new(Rest)),
+            "put" => Some(Box::new(Put)),
             _ => None,
         }
     }
