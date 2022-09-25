@@ -107,6 +107,7 @@ impl<T: BufRead + Seek> Parser<T> {
         self.register_prefix(Token::LBrace, Self::parse_hashmap_literal);
         self.register_prefix(Token::If, Self::parse_if_expression);
         self.register_prefix(Token::Function, Self::parse_function_literal);
+        self.register_prefix(Token::Macro, Self::parse_macro_literal);
 
         self.register_infix(Token::Plus, Self::parse_infix_expression);
         self.register_infix(Token::Minus, Self::parse_infix_expression);
@@ -269,6 +270,21 @@ impl<T: BufRead + Seek> Parser<T> {
 
         Ok(Expression::FuncExpr(FunctionLiteral {
             token: Token::Function,
+            parameters,
+            body,
+        }))
+    }
+
+    fn parse_macro_literal(&mut self) -> Result<Expression>{
+        self.expected_peek(Token::LParen)?;
+        let parameters = self.parse_expression_list(Token::RParen)?;
+
+        self.expected_peek(Token::LBrace)?;
+
+        let body = self.parse_block_statement()?;
+
+        Ok(Expression::MacroExpr(FunctionLiteral {
+            token: Token::Macro,
             parameters,
             body,
         }))
@@ -579,6 +595,18 @@ mod tests {
             ("fn(x,y,z){a}", "fn (x,y,z) {a}"),
             ("fn(x,y) { x + y}", "fn (x,y) {(x + y)}"),
             ("fn(x,y) {}", "fn (x,y) {}"),
+        ];
+        run_cases(&cases);
+    }
+
+    #[test]
+    fn test_parsing_macro_literal_work() {
+        let cases = vec![
+            ("macro(){y}", "macro () {y}"),
+            ("macro(x){y}", "macro (x) {y}"),
+            ("macro(x,y,z){a}", "macro (x,y,z) {a}"),
+            ("macro(x,y) { x + y}", "macro (x,y) {(x + y)}"),
+            ("macro(x,y) {}", "macro (x,y) {}"),
         ];
         run_cases(&cases);
     }

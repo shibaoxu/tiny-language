@@ -14,6 +14,7 @@ pub enum ObjectType {
     Array,
     Hashmap,
     Quote,
+    Macro,
 }
 
 impl Display for ObjectType {
@@ -28,6 +29,7 @@ impl Display for ObjectType {
             ObjectType::Array => "ARRAY",
             ObjectType::Hashmap => "HASHMAP",
             ObjectType::Quote => "QUOTE",
+            ObjectType::Macro => "MACRO",
         };
         f.write_str(s)
     }
@@ -44,6 +46,7 @@ pub enum WrappedValue {
     ArrayValue(Vec<Value>),
     HashMapValue(BTreeMap<Value, Value>),
     Quote(Expression),
+    MacroValue(Macro),
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Ord, PartialOrd)]
@@ -69,6 +72,21 @@ impl Display for Function {
         f.write_str(&format!("fn({}){{{}}}", arguments, body))
     }
 }
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
+pub struct Macro {
+    pub parameters: Vec<Expression>,
+    pub body: BlockStatement,
+}
+
+impl Display for Macro {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let arguments = self.parameters.iter().map(|e| e.to_string()).collect::<Vec<_>>().join(",");
+        let body = self.body.statements.iter().map(|e| e.to_string()).collect::<String>();
+        f.write_str(&format!("macro({}){{{}}}", arguments, body))
+    }
+}
+
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct BuiltinFunction(pub String);
@@ -111,6 +129,7 @@ impl Value {
                 format!("{{{}}}", s)
             }
             WrappedValue::Quote(v) => v.token_literal(),
+            WrappedValue::MacroValue(v) => format!("{}", v),
         }
     }
 
@@ -156,6 +175,12 @@ impl From<NullValue> for Value {
 impl From<Function> for Value {
     fn from(v: Function) -> Self {
         Self { value: WrappedValue::FunValue(v), is_return: false, type_of: ObjectType::Fun }
+    }
+}
+
+impl From<Macro> for Value {
+    fn from(v: Macro) -> Self {
+        Self { value: WrappedValue::MacroValue(v), is_return: false, type_of: ObjectType::Macro }
     }
 }
 
@@ -247,6 +272,18 @@ impl TryFrom<&Value> for Function {
     }
 }
 
+impl TryFrom<&Value> for Macro {
+    type Error = Error;
+
+    fn try_from(value: &Value) -> Result<Self, Self::Error> {
+        if let WrappedValue::MacroValue(v) = value.value.clone() {
+            Ok(v)
+        } else {
+            Err(format_err!("can not convert `{:?}` to `Macro`", value))
+        }
+    }
+}
+
 impl TryFrom<&Value> for BuiltinFunction {
     type Error = Error;
 
@@ -287,9 +324,9 @@ impl TryFrom<&Value> for Expression {
     type Error = Error;
 
     fn try_from(value: &Value) -> std::result::Result<Self, Self::Error> {
-        if let WrappedValue::Quote(v) = value.value.clone(){
+        if let WrappedValue::Quote(v) = value.value.clone() {
             Ok(v)
-        }else{
+        } else {
             Err(format_err!("can not convert `{:?}` to `Quote`", value))
         }
     }

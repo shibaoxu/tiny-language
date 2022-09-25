@@ -43,6 +43,7 @@ pub enum Token {
     If,
     Else,
     Return,
+    Macro,
 }
 
 impl Token {
@@ -55,6 +56,7 @@ impl Token {
             "if" => Token::If,
             "else" => Token::Else,
             "return" => Token::Return,
+            "macro" => Token::Macro,
             _ => Token::Identity(String::from(ident)),
         }
     }
@@ -121,7 +123,8 @@ impl Display for Token {
             Token::Else => "else".into(),
             Token::Return => "return".into(),
             Token::LBracket => "[".into(),
-            Token::RBracket => "]".into()
+            Token::RBracket => "]".into(),
+            Token::Macro => "macro".into(),
         })
     }
 }

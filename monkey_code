@@ -17,3 +17,4 @@ if (5 < 10) {
 "foo bar"
 [foo, 10]
 {"foo": "bar"}
+macro(x,y){x+y;}

@@ -1,16 +1,18 @@
 use std::collections::BTreeMap;
 use crate::ast::{IndexExpression, ArrayLiteral, BlockStatement, CallExpression, Expression, ExpressionStatement, FunctionLiteral, HashmapLiteral, Identifier, IfExpression, InfixExpression, LetStatement, Node, PrefixExpression, Program, ReturnStatement, Statement};
 use crate::evaluator::environment::Environment;
-use crate::evaluator::object::{BuiltinFunction, Function, NullValue, ObjectType, Value, WrappedValue};
+use crate::evaluator::object::{BuiltinFunction, Function, Macro, NullValue, ObjectType, Value, WrappedValue};
 use crate::lexer::token::Token;
 use anyhow::{format_err, Result};
 use crate::evaluator::builtin::Builtins;
+use crate::evaluator::object::WrappedValue::MacroValue;
 use crate::evaluator::quote_unquote::quote;
 
 pub mod object;
 pub mod environment;
 mod builtin;
 mod quote_unquote;
+mod macro_expansion;
 
 pub fn eval(program: &Program, env: &mut Environment) -> Result<Value> {
     eval_statements(&program.statements, env)
@@ -68,14 +70,15 @@ fn eval_expression(expression: &Expression, env: &Environment) -> Result<Value> 
         Expression::IfExpr(expr) => eval_if_expression(expr, env)?,
         Expression::FuncExpr(expr) => eval_func_literal(expr, env)?,
         Expression::CallExpr(expr) => {
-            if expr.function.token_literal() == "quote"{
+            if expr.function.token_literal() == "quote" {
                 return Ok(quote(expr.arguments[0].as_ref(), env));
             }
             eval_call_function(expr, env)?
-        },
+        }
         Expression::ArrayExpr(expr) => eval_array_literal(expr, env)?,
         Expression::IndexExpr(expr) => eval_index(expr, env)?,
         Expression::HashMapExpr(expr) => eval_hashmap_literal(expr, env)?,
+        Expression::MacroExpr(expr) => eval_macro_literal(expr, env)?,
     };
     Ok(val)
 }
@@ -180,6 +183,18 @@ fn eval_func_literal(expr: &FunctionLiteral, _env: &Environment) -> Result<Value
     )
 }
 
+fn eval_macro_literal(expr: &FunctionLiteral, _env: &Environment) -> Result<Value> {
+    Ok(
+        Value::from(
+            Macro {
+                parameters: expr.parameters.clone(),
+                body: expr.body.clone(),
+            }
+        )
+    )
+}
+
+
 fn eval_call_function(expr: &CallExpression, env: &Environment) -> Result<Value> {
     // 获得函数的定义
     let func_define = eval_expression(expr.function.as_ref(), env)?;
@@ -243,7 +258,7 @@ fn eval_index(expr: &IndexExpression, env: &Environment) -> Result<Value> {
     let obj = eval_expression(expr.name.as_ref(), env)?;
 
     let index = eval_expression(expr.index.as_ref(), env)?;
-    let result = match obj.type_of{
+    let result = match obj.type_of {
         ObjectType::Array => {
             let values = Vec::try_from(&obj)?;
             let index = i64::try_from(&index)?;
@@ -254,9 +269,9 @@ fn eval_index(expr: &IndexExpression, env: &Environment) -> Result<Value> {
         }
         ObjectType::Hashmap => {
             let values = BTreeMap::try_from(&obj)?;
-            if let Some(v) = values.get(&index){
+            if let Some(v) = values.get(&index) {
                 v.clone()
-            }else{
+            } else {
                 Value::from(NullValue)
             }
         }
@@ -277,14 +292,51 @@ fn eval_hashmap_literal(expr: &HashmapLiteral, env: &Environment) -> Result<Valu
     Ok(Value::from(v))
 }
 
+fn define_macro(program: &mut Program, env: &mut Environment) {
+    let mut un_macro = vec![];
+    for statement in &program.statements {
+        if is_macro_definition(statement) {
+            add_macro(statement, env);
+        } else {
+            un_macro.push(statement.clone());
+        }
+    }
+    program.statements = un_macro;
+}
+
+fn is_macro_definition(stmt: &Statement) -> bool {
+    if let Statement::LetStmt(l) = stmt {
+        return match l.value {
+            Expression::MacroExpr(_) => true,
+            _ => false,
+        };
+    }
+    false
+}
+
+fn add_macro(stmt: &Statement, env: &mut Environment) {
+    if let Statement::LetStmt(stmt) = stmt {
+        if let Expression::MacroExpr(func_literal) = &stmt.value {
+            let macro_value = Macro {
+                parameters: func_literal.parameters.clone(),
+                body: func_literal.body.clone(),
+            };
+            let value = Value::from(macro_value);
+            env.set(&stmt.name.to_string(), value);
+        }
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
     use std::fs::File;
     use std::io::BufReader;
+    use crate::ast::Node;
     use crate::evaluator::environment::Environment;
-    use crate::evaluator::eval;
-    use crate::evaluator::object::{NullValue, Value};
+    use crate::evaluator::{define_macro, eval};
+    use crate::evaluator::object::{NullValue, ObjectType, Value, WrappedValue};
     use crate::parser::Parser;
 
 
@@ -644,7 +696,7 @@ mod tests {
     }
 
     #[test]
-    fn test_hashmap_index(){
+    fn test_hashmap_index() {
         let cases = vec![
             ("{\"name\": \"monkey\", \"age\": 10}[\"name\"]", Value::from("monkey")),
             ("{\"name\": \"monkey\", \"age\": 10}[\"age\"]", Value::from(10)),
@@ -653,4 +705,35 @@ mod tests {
         run_cases(&cases)
     }
 
+    #[test]
+    fn test_define_macro() {
+        let input = "\
+            let number = 1;\
+            let function = fn(x,y){x+y};\
+            let my_macro = macro(x,y) { x + y;};";
+        let mut parser = Parser::from_string(input);
+        let mut program = parser.parse().unwrap();
+        assert_eq!(parser.errors.len(), 0);
+
+        let mut env = Environment::new();
+        define_macro(&mut program, &mut env);
+
+        assert_eq!(program.statements.len(), 2);
+        assert!(env.get("number").is_none());
+        assert!(env.get("function").is_none());
+        assert!(env.get("my_macro").is_some());
+
+        let my_macro = env.get("my_macro").unwrap();
+        assert_eq!(my_macro.type_of, ObjectType::Macro);
+
+        match my_macro.value {
+            WrappedValue::MacroValue(v) => {
+                assert_eq!(v.parameters.len(), 2);
+                assert_eq!(v.parameters[0].token_literal(), "x");
+                assert_eq!(v.parameters[1].token_literal(), "y");
+                assert_eq!(v.body.token_literal(), "{(x + y)}");
+            }
+            _ => panic!("")
+        }
+    }
 }

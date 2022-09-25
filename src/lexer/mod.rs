@@ -224,7 +224,7 @@ mod tests {
         \"foo bar\" \
         [foo, 10] \
         {\"foo\": \"bar\"} \
-        ";
+        macro(x,y){x+y;}";
 
         let outputs = vec![
             Token::Let, Token::Identity("five".to_string()), Token::Assign, Token::Int(5), Token::Semicolon,
@@ -246,6 +246,7 @@ mod tests {
             Token::String("foo bar".to_string()),
             Token::LBracket, Token::Identity("foo".to_string()), Token::Comma, Token::Int(10), Token::RBracket,
             Token::LBrace, Token::String("foo".to_string()),Token::Colon, Token::String("bar".to_string()), Token::RBrace,
+            Token::Macro, Token::LParen, Token::Identity("x".to_string()), Token::Comma, Token::Identity("y".to_string()),Token::RParen, Token::LBrace, Token::Identity("x".to_string()), Token::Plus, Token::Identity("y".to_string()), Token::Semicolon, Token::RBrace,
             Token::EOF,
         ];
 
