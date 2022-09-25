@@ -1,18 +1,17 @@
 use std::collections::BTreeMap;
 use crate::ast::{IndexExpression, ArrayLiteral, BlockStatement, CallExpression, Expression, ExpressionStatement, FunctionLiteral, HashmapLiteral, Identifier, IfExpression, InfixExpression, LetStatement, Node, PrefixExpression, Program, ReturnStatement, Statement};
 use crate::evaluator::environment::Environment;
-use crate::evaluator::object::{BuiltinFunction, Function, Macro, NullValue, ObjectType, Value, WrappedValue};
+use crate::evaluator::object::{BuiltinFunction, Function, MacroDefinition, NullValue, ObjectType, Value, WrappedValue};
 use crate::lexer::token::Token;
 use anyhow::{format_err, Result};
 use crate::evaluator::builtin::Builtins;
-use crate::evaluator::object::WrappedValue::MacroValue;
 use crate::evaluator::quote_unquote::quote;
 
 pub mod object;
 pub mod environment;
 mod builtin;
 mod quote_unquote;
-mod macro_expansion;
+pub mod macro_extend;
 
 pub fn eval(program: &Program, env: &mut Environment) -> Result<Value> {
     eval_statements(&program.statements, env)
@@ -186,7 +185,7 @@ fn eval_func_literal(expr: &FunctionLiteral, _env: &Environment) -> Result<Value
 fn eval_macro_literal(expr: &FunctionLiteral, _env: &Environment) -> Result<Value> {
     Ok(
         Value::from(
-            Macro {
+            MacroDefinition {
                 parameters: expr.parameters.clone(),
                 body: expr.body.clone(),
             }
@@ -292,40 +291,6 @@ fn eval_hashmap_literal(expr: &HashmapLiteral, env: &Environment) -> Result<Valu
     Ok(Value::from(v))
 }
 
-fn define_macro(program: &mut Program, env: &mut Environment) {
-    let mut un_macro = vec![];
-    for statement in &program.statements {
-        if is_macro_definition(statement) {
-            add_macro(statement, env);
-        } else {
-            un_macro.push(statement.clone());
-        }
-    }
-    program.statements = un_macro;
-}
-
-fn is_macro_definition(stmt: &Statement) -> bool {
-    if let Statement::LetStmt(l) = stmt {
-        return match l.value {
-            Expression::MacroExpr(_) => true,
-            _ => false,
-        };
-    }
-    false
-}
-
-fn add_macro(stmt: &Statement, env: &mut Environment) {
-    if let Statement::LetStmt(stmt) = stmt {
-        if let Expression::MacroExpr(func_literal) = &stmt.value {
-            let macro_value = Macro {
-                parameters: func_literal.parameters.clone(),
-                body: func_literal.body.clone(),
-            };
-            let value = Value::from(macro_value);
-            env.set(&stmt.name.to_string(), value);
-        }
-    }
-}
 
 
 #[cfg(test)]
@@ -335,7 +300,8 @@ mod tests {
     use std::io::BufReader;
     use crate::ast::Node;
     use crate::evaluator::environment::Environment;
-    use crate::evaluator::{define_macro, eval};
+    use crate::evaluator::eval;
+    use crate::evaluator::macro_extend::{define_macro, expand_macro};
     use crate::evaluator::object::{NullValue, ObjectType, Value, WrappedValue};
     use crate::parser::Parser;
 
@@ -734,6 +700,33 @@ mod tests {
                 assert_eq!(v.body.token_literal(), "{(x + y)}");
             }
             _ => panic!("")
+        }
+    }
+
+    #[test]
+    fn test_expand_macro() {
+        let cases = vec![
+            ("let infixExpression = macro(){quote(1+2);}; infixExpression();", "(1 + 2)"),
+            ("let reverse = macro(a,b) {quote(unquote(b) - unquote(a));}; reverse(2+2, 10-5)", "((10 - 5) - (2 + 2))"),
+            ("let unless = macro(condition, consequence, alternative){\
+                quote(if (!(unquote(condition))){\
+                    unquote(consequence);\
+                } else {\
+                    unquote(alternative);\
+                });\
+            };\
+            unless(10>5, puts(\"not greater\"), puts(\"greater\"));",
+            "if (!(10 > 5)) {puts(\"not greater\")} else {puts(\"greater\")}")
+        ];
+
+        for &(input, expected) in cases.iter() {
+            let mut parser = Parser::from_string(input);
+            let mut program = parser.parse().unwrap();
+            assert_eq!(parser.errors.len(), 0);
+            let mut env = Environment::new();
+            define_macro(&mut program, &mut env);
+            let program = expand_macro(&program, &env);
+            assert_eq!(program.statements[0].to_string(), expected)
         }
     }
 }

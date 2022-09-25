@@ -467,3 +467,9 @@ fn modify_block_statement(stmt: &BlockStatement, env: &Environment, modifier: fn
         statements: stmts,
     }
 }
+
+pub fn modify_program(program: &Program, env: &Environment, modifier: fn(&Expression, &Environment) -> Expression) -> Program {
+    Program {
+        statements: program.statements.iter().map(|e| modify_statement(e, env, modifier)).collect()
+    }
+}

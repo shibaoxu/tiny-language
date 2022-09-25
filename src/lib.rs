@@ -2,6 +2,8 @@
 #![feature(trait_upcasting)]
 #![allow(incomplete_features)]
 
+extern crate core;
+
 pub mod lexer;
 pub mod parser;
 pub mod ast;

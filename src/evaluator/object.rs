@@ -46,7 +46,7 @@ pub enum WrappedValue {
     ArrayValue(Vec<Value>),
     HashMapValue(BTreeMap<Value, Value>),
     Quote(Expression),
-    MacroValue(Macro),
+    MacroValue(MacroDefinition),
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Ord, PartialOrd)]
@@ -74,12 +74,12 @@ impl Display for Function {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
-pub struct Macro {
+pub struct MacroDefinition {
     pub parameters: Vec<Expression>,
     pub body: BlockStatement,
 }
 
-impl Display for Macro {
+impl Display for MacroDefinition {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let arguments = self.parameters.iter().map(|e| e.to_string()).collect::<Vec<_>>().join(",");
         let body = self.body.statements.iter().map(|e| e.to_string()).collect::<String>();
@@ -178,8 +178,8 @@ impl From<Function> for Value {
     }
 }
 
-impl From<Macro> for Value {
-    fn from(v: Macro) -> Self {
+impl From<MacroDefinition> for Value {
+    fn from(v: MacroDefinition) -> Self {
         Self { value: WrappedValue::MacroValue(v), is_return: false, type_of: ObjectType::Macro }
     }
 }
@@ -272,7 +272,7 @@ impl TryFrom<&Value> for Function {
     }
 }
 
-impl TryFrom<&Value> for Macro {
+impl TryFrom<&Value> for MacroDefinition {
     type Error = Error;
 
     fn try_from(value: &Value) -> Result<Self, Self::Error> {
