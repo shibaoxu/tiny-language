@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
-use std::fmt::{Display,Formatter};
-use crate::ast::{BlockStatement, Expression};
+use std::fmt::{Display, Formatter};
+use crate::ast::{BlockStatement, Expression, Node};
 use anyhow::{Result, Error, format_err};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Ord, PartialOrd)]
@@ -13,6 +13,7 @@ pub enum ObjectType {
     Builtin,
     Array,
     Hashmap,
+    Quote,
 }
 
 impl Display for ObjectType {
@@ -25,7 +26,8 @@ impl Display for ObjectType {
             ObjectType::Fun => "FUNCTION",
             ObjectType::Builtin => "BUILTIN",
             ObjectType::Array => "ARRAY",
-            ObjectType::Hashmap => "HASHMAP"
+            ObjectType::Hashmap => "HASHMAP",
+            ObjectType::Quote => "QUOTE",
         };
         f.write_str(s)
     }
@@ -41,6 +43,7 @@ pub enum WrappedValue {
     BuiltinValue(BuiltinFunction),
     ArrayValue(Vec<Value>),
     HashMapValue(BTreeMap<Value, Value>),
+    Quote(Expression),
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Ord, PartialOrd)]
@@ -107,6 +110,7 @@ impl Value {
                     .join(",");
                 format!("{{{}}}", s)
             }
+            WrappedValue::Quote(v) => v.token_literal(),
         }
     }
 
@@ -164,6 +168,12 @@ impl From<BuiltinFunction> for Value {
 impl From<Vec<Value>> for Value {
     fn from(v: Vec<Value>) -> Self {
         Self { value: WrappedValue::ArrayValue(v), is_return: false, type_of: ObjectType::Array }
+    }
+}
+
+impl From<Expression> for Value {
+    fn from(v: Expression) -> Self {
+        Self { value: WrappedValue::Quote(v), is_return: false, type_of: ObjectType::Quote }
     }
 }
 
@@ -265,10 +275,22 @@ impl TryFrom<&Value> for BTreeMap<Value, Value> {
     type Error = Error;
 
     fn try_from(value: &Value) -> std::result::Result<Self, Self::Error> {
-        if let WrappedValue::HashMapValue(v) = value.value.clone(){
+        if let WrappedValue::HashMapValue(v) = value.value.clone() {
+            Ok(v)
+        } else {
+            Err(format_err!("can not convert `{:?}` to `Hashmap`", value))
+        }
+    }
+}
+
+impl TryFrom<&Value> for Expression {
+    type Error = Error;
+
+    fn try_from(value: &Value) -> std::result::Result<Self, Self::Error> {
+        if let WrappedValue::Quote(v) = value.value.clone(){
             Ok(v)
         }else{
-            Err(format_err!("can not convert `{:?}` to `Hashmap`", value))
+            Err(format_err!("can not convert `{:?}` to `Quote`", value))
         }
     }
 }

@@ -5,10 +5,12 @@ use crate::evaluator::object::{BuiltinFunction, Function, NullValue, ObjectType,
 use crate::lexer::token::Token;
 use anyhow::{format_err, Result};
 use crate::evaluator::builtin::Builtins;
+use crate::evaluator::quote_unquote::quote;
 
 pub mod object;
 pub mod environment;
 mod builtin;
+mod quote_unquote;
 
 pub fn eval(program: &Program, env: &mut Environment) -> Result<Value> {
     eval_statements(&program.statements, env)
@@ -55,8 +57,8 @@ fn eval_expression_stmt(stmt: &ExpressionStatement, env: &mut Environment) -> Re
     eval_expression(&stmt.expression, env)
 }
 
-fn eval_expression(expr: &Expression, env: &Environment) -> Result<Value> {
-    let val = match expr {
+fn eval_expression(expression: &Expression, env: &Environment) -> Result<Value> {
+    let val = match expression {
         Expression::IdentExpr(expr) => eval_identifier(expr, env)?,
         Expression::BoolExpr(expr) => Value::from(expr.value),
         Expression::IntExpr(expr) => Value::from(expr.value),
@@ -65,7 +67,12 @@ fn eval_expression(expr: &Expression, env: &Environment) -> Result<Value> {
         Expression::InfixExpr(expr) => eval_infix_expression(expr, env)?,
         Expression::IfExpr(expr) => eval_if_expression(expr, env)?,
         Expression::FuncExpr(expr) => eval_func_literal(expr, env)?,
-        Expression::CallExpr(expr) => eval_call_function(expr, env)?,
+        Expression::CallExpr(expr) => {
+            if expr.function.token_literal() == "quote"{
+                return Ok(quote(expr.arguments[0].as_ref(), env));
+            }
+            eval_call_function(expr, env)?
+        },
         Expression::ArrayExpr(expr) => eval_array_literal(expr, env)?,
         Expression::IndexExpr(expr) => eval_index(expr, env)?,
         Expression::HashMapExpr(expr) => eval_hashmap_literal(expr, env)?,
@@ -645,4 +652,5 @@ mod tests {
         ];
         run_cases(&cases)
     }
+
 }

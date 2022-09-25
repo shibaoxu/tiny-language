@@ -1,5 +1,6 @@
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
+use crate::evaluator::environment::Environment;
 
 use crate::lexer::token::Token;
 
@@ -59,6 +60,25 @@ impl Display for Expression {
             Expression::ArrayExpr(expr) => f.write_str(&expr.token_literal()),
             Expression::IndexExpr(expr) => f.write_str(&expr.token_literal()),
             Expression::HashMapExpr(expr) => f.write_str(&expr.token_literal()),
+        }
+    }
+}
+
+impl Node for Expression {
+    fn token_literal(&self) -> String {
+        match self {
+            Expression::IdentExpr(v) => v.token_literal(),
+            Expression::BoolExpr(v) => v.token_literal(),
+            Expression::IntExpr(v) => v.token_literal(),
+            Expression::StrExpr(v) => v.token_literal(),
+            Expression::PrefixExpr(v) => v.token_literal(),
+            Expression::InfixExpr(v) => v.token_literal(),
+            Expression::IfExpr(v) => v.token_literal(),
+            Expression::FuncExpr(v) => v.token_literal(),
+            Expression::CallExpr(v) => v.token_literal(),
+            Expression::ArrayExpr(v) => v.token_literal(),
+            Expression::IndexExpr(v) => v.token_literal(),
+            Expression::HashMapExpr(v) => v.token_literal(),
         }
     }
 }
@@ -290,7 +310,7 @@ impl Display for CallExpression {
 
 impl Node for CallExpression {}
 
-#[derive(Debug, Clone, Eq, PartialEq,Hash, Ord, PartialOrd)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct ArrayLiteral {
     pub token: Token,
     pub elements: Vec<Box<Expression>>,
@@ -334,3 +354,113 @@ impl Display for HashmapLiteral {
 }
 
 impl Node for HashmapLiteral {}
+
+pub fn modify(node: &Expression, env: &Environment, modifier: fn(&Expression, &Environment) -> Expression) -> Expression {
+    match node {
+        Expression::InfixExpr(expr) => {
+            Expression::InfixExpr(InfixExpression {
+                token: expr.token.clone(),
+                left: Box::new(modify(expr.left.as_ref(), env, modifier)),
+                operator: expr.operator.clone(),
+                right: Box::new(modify(expr.right.as_ref(), env, modifier)),
+            })
+        }
+        Expression::IfExpr(expr) => {
+            Expression::IfExpr(IfExpression {
+                token: expr.token.clone(),
+                condition: Box::new(modify(expr.condition.as_ref(), env, modifier)),
+                consequence: modify_block_statement(&expr.consequence, env, modifier),
+                alternative: expr.alternative.as_ref().map(|e| Box::new(modify_block_statement(e.as_ref(), env, modifier))),
+            })
+        }
+        Expression::FuncExpr(expr) => {
+            Expression::FuncExpr(FunctionLiteral {
+                token: expr.token.clone(),
+                parameters: expr.parameters.iter().map(|e| modify(&e, env, modifier)).collect(),
+                body: modify_block_statement(&expr.body, env, modifier),
+            })
+        }
+        Expression::ArrayExpr(expr) => {
+            Expression::ArrayExpr(ArrayLiteral {
+                token: expr.token.clone(),
+                elements: expr.elements.iter().map(|e| Box::new(modify(e.as_ref(), env, modifier))).collect::<Vec<_>>(),
+            })
+        }
+
+        Expression::HashMapExpr(expr) => {
+            Expression::HashMapExpr(HashmapLiteral {
+                token: expr.token.clone(),
+                pairs: expr.pairs.iter().map(|e| (modify(&e.0, env, modifier), modify(&e.1, env, modifier))).collect(),
+            })
+        }
+        Expression::PrefixExpr(expr) => {
+            Expression::PrefixExpr(PrefixExpression {
+                token: expr.token.clone(),
+                operator: expr.operator.clone(),
+                right: Box::new(modify(expr.right.as_ref(), env, modifier)),
+            })
+        }
+        Expression::IndexExpr(expr) => {
+            Expression::IndexExpr(IndexExpression {
+                token: expr.token.clone(),
+                name: Box::new(modify(expr.name.as_ref(), env, modifier)),
+                index: Box::new(modify(expr.name.as_ref(), env, modifier)),
+            })
+        }
+        // Expression::CallExpr(expr) => {
+        //     println!("4.{:?}", expr);
+        //     Expression::CallExpr(CallExpression {
+        //         token: expr.token.clone(),
+        //         function: Box::new(modify(expr.function.as_ref(), env, modifier)),
+        //         arguments: expr.arguments.iter().map(|e| Box::new(modify(e.as_ref(), env, modifier))).collect(),
+        //     })
+        // }
+        // Expression::IdentExpr(expr_)=>{}
+        // Expression::BoolExpr(_) => {}
+        // Expression::IntExpr(_) => {}
+        // Expression::StrExpr(_) => {}
+        _ => {
+            modifier(node, env)
+        }
+    }
+}
+
+fn modify_statement(node: &Statement, env: &Environment, modifier: fn(&Expression, &Environment) -> Expression) -> Statement {
+    match node {
+        Statement::LetStmt(stmt) => {
+            Statement::LetStmt(LetStatement {
+                token: stmt.token.clone(),
+                name: stmt.name.clone(),
+                value: modify(&stmt.value, env, modifier),
+            })
+        }
+
+        Statement::ReturnStmt(stmt) => {
+            Statement::ReturnStmt(ReturnStatement {
+                token: stmt.token.clone(),
+                value: modify(&stmt.value, env, modifier),
+            })
+        }
+        Statement::BlockStmt(stmt) => {
+            Statement::BlockStmt(
+                modify_block_statement(stmt, env, modifier)
+            )
+        }
+        Statement::ExpStmt(stmt) => {
+            Statement::ExpStmt(
+                ExpressionStatement {
+                    token: stmt.token.clone(),
+                    expression: modify(&stmt.expression, env, modifier),
+                }
+            )
+        }
+    }
+}
+
+fn modify_block_statement(stmt: &BlockStatement, env: &Environment, modifier: fn(&Expression, &Environment) -> Expression) -> BlockStatement {
+    let stmts = stmt.statements.iter().map(|e| modify_statement(e, env, modifier.clone())).collect::<Vec<_>>();
+    BlockStatement {
+        token: stmt.token.clone(),
+        statements: stmts,
+    }
+}
